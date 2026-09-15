@@ -1,0 +1,279 @@
+.authWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.authFormSection {
+  padding: 100px;
+  height: 100%;
+  align-content: center;
+}
+
+.brandTitle {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--primary-color);
+  margin-bottom: 16px;
+  letter-spacing: -1px;
+}
+
+.heroSubtitle {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.heroTagline {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.inputGroup {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.inputGroup input {
+  padding-left: 45px;
+  height: 52px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  font-size: 15px;
+}
+
+.inputGroup input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 4px rgba(45, 71, 53, 0.1);
+}
+
+.inputIcon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  font-size: 18px;
+}
+
+.inputIconRight {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.inputIconRight:hover {
+  color: var(--primary-color);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 16px 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.auth-forgot-btn {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 500;
+  color: #619270;
+  border: none;
+  outline: none;
+  text-decoration: none;
+}
+
+.auth-forgot-btn:hover {
+  color: var(--primary-color);
+  text-decoration: underline !important;
+}
+
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.divider:not(:empty)::before {
+  margin-right: .5em;
+}
+
+.divider:not(:empty)::after {
+  margin-left: .5em;
+}
+
+.googleBtn {
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 500;
+  padding: 12px;
+  border-radius: 8px;
+  transition: all 0.3s;
+  width: 100%;
+  font-size: 16px;
+}
+
+.googleBtn:hover {
+  background: #d2d2d2;
+}
+
+/* Image Side */
+.authImage {
+  background-color: #2D4735;
+  background-image: url('/public/login-banner.jpg');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  height: 100%;
+  min-height: 100vh;
+}
+
+
+
+.imageOverlayText {
+  font-size: 52px;
+  font-weight: 600;
+  color: #d5d5d5;
+  line-height: 1.15;
+  padding: 40px;
+  height: 100%;
+  align-content: center;
+  text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+
+.statsBar {
+  background-color: rgba(134, 134, 134, 0.8);
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 40px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+
+}
+
+.statItem p {
+  color: #d1d1d1;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.statItem h4 {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.auth-input-with-icon {
+  padding-left: 45px !important;
+  height: 52px !important;
+}
+
+.otp-inputs{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+@media (max-width: 1200px) {
+  .authFormSection {
+    padding: 50px 50px;
+  }
+}
+
+@media (max-width: 991px) {
+  .authFormSection {
+    padding: 40px 30px;
+    min-height: 100vh;
+    align-content: center;
+  }
+
+  .imageOverlayText {
+    font-size: 36px;
+    padding: 0 30px;
+  }
+
+  .statsBar {
+    padding: 40px 30px 20px 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .authImage {
+    display: none;
+  }
+
+  .authFormSection {
+    padding:16px;
+  }
+}
+
+
+@media (max-width: 576px) {}
+/* Custom Checkbox */
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.custom-checkbox input[type='checkbox'] {
+  appearance: none;
+  background-color: #fff;
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #d1d1d1;
+  border-radius: 4px;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+.custom-checkbox input[type='checkbox']::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  box-shadow: inset 1em 1em #fff;
+  transform-origin: center;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.custom-checkbox input[type='checkbox']:checked {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+.custom-checkbox input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+.custom-checkbox label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+  cursor: pointer;
+  margin-bottom: 0;
+}

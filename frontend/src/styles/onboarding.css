@@ -1,0 +1,597 @@
+/* Onboarding Styles - Match Image Design */
+.onboarding-page {
+  min-height: 100vh;
+  background: #fff;
+}
+
+.onboarding-page > .container-fluid {
+  padding: 0;
+}
+
+/* Sidebar */
+/* .onboarding-sidebar {
+  padding: 32px 24px;
+  border-right: 1px solid #f0f0f0;
+  min-height: 100vh;
+  background: #fff;
+} */
+
+.sidebar-brand {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1a1a1a;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 0;
+  letter-spacing: -0.5px;
+}
+
+.sidebar-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  position: relative;
+}
+
+.sidebar-step .step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e8e8e8;
+  color: #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-step.active .step-circle {
+  background: #2D4735;
+  color: #fff;
+}
+
+.sidebar-step.completed .step-circle {
+  background: #2D4735;
+  color: #fff;
+}
+
+.sidebar-step .step-label {
+  font-size: 14px;
+  color: #888;
+  font-weight: 500;
+}
+
+.sidebar-step.active .step-label {
+  color: #2D4735;
+  font-weight: 600;
+}
+
+.sidebar-step.completed .step-label {
+  color: #2D4735;
+}
+
+.step-line {
+  position: absolute;
+  left: 15px;
+  top: 44px;
+  width: 2px;
+  height: 24px;
+  background: #e0e0e0;
+}
+
+.sidebar-step.completed .step-line {
+  background: #2D4735;
+}
+
+/* Main Content */
+.onboarding-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.onboarding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0px;
+}
+
+.header-more-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.onboarding-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 40px 40px;
+}
+
+/* Typography */
+.onboarding-heading {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.onboarding-desc {
+  font-size: 15px;
+  color: #888;
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+/* Form */
+
+
+/* Next Button */
+.onboarding-next-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: #2D4735;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  text-align: center;
+  display: block;
+  margin-top: 8px;
+}
+
+.onboarding-next-btn:hover {
+  background: #243a2c;
+  color: #fff;
+}
+
+/* Right Side - Info Card */
+.onboarding-right-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  background: #f5f7f5;
+}
+
+.info-card {
+  background: #e8ede9;
+  border-radius: 20px;
+  padding: 40px 32px;
+  max-width: 300px;
+  width: 100%;
+}
+
+.info-card-icon {
+  margin-bottom: 24px;
+}
+
+.info-card-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+.info-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.info-card-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #333;
+}
+
+.info-card-list .check-icon {
+  color: #2D4735;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* Back Arrow */
+.back-arrow {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.back-arrow:hover {
+  border-color: #ccc;
+  color: #000;
+}
+
+.step-counter {
+  font-size: 14px;
+  color: #999;
+  font-weight: 500;
+}
+
+/* Navigation */
+.onboarding-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  margin-top: auto;
+}
+
+.nav-back {
+  font-size: 14px;
+  color: #666;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav-back:hover {
+  color: #333;
+}
+
+.nav-skip {
+  font-size: 14px;
+  color: #888;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav-skip:hover {
+  color: #555;
+}
+
+/* Track Options (Step 2) */
+.track-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 32px;
+}
+
+.track-option-card {
+  background: #fff;
+  border: 2px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.track-option-card:hover {
+  border-color: #ccc;
+}
+
+.track-option-card.selected {
+  border-color: #2D4735;
+  background: #f9faf9;
+}
+
+.track-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #f0f4f1;
+  color: #2D4735;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin: 0 auto 14px;
+}
+
+.track-option-card.selected .track-card-icon {
+  background: #2D4735;
+  color: #fff;
+}
+
+.track-option-card h5 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.track-option-card p {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+
+/* Email Providers (Step 3) */
+.email-providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.provider-card {
+  background: #fff;
+  border: 2px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.provider-card.recommended {
+  border-color: #2D4735;
+  background: #f9faf9;
+}
+
+.provider-logo {
+  margin-bottom: 14px;
+}
+
+.provider-card h5 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.provider-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.recommended-badge {
+  background: #e8f5e9;
+  color: #2D4735;
+}
+
+.coming-soon-badge {
+  background: #f0f0f0;
+  color: #888;
+}
+
+.provider-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.provider-btn.primary {
+  background: #2D4735;
+  color: #fff;
+}
+
+.provider-btn.primary:hover {
+  background: #243a2c;
+}
+
+.provider-btn.outline {
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.provider-features {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.feature-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #555;
+}
+
+.feature-check .check-icon {
+  color: #2D4735;
+  font-weight: 700;
+}
+
+/* Invite Team (Step 4) */
+.invite-form {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.invite-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.invite-row .form-control {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.invite-row .form-control:focus {
+  border-color: #2D4735;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(45, 71, 53, 0.08);
+}
+
+.role-select {
+  width: 130px;
+  padding: 12px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.role-select:focus {
+  border-color: #2D4735;
+  outline: none;
+}
+
+.add-another-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: #2D4735;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.add-another-btn:hover {
+  color: #243a2c;
+}
+
+.send-invites-btn {
+  width: 100%;
+  max-width: 200px;
+  padding: 12px 24px;
+  background: #2D4735;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 24px;
+  float: right;
+}
+
+.send-invites-btn:hover {
+  background: #243a2c;
+}
+
+/* All Set (Step 5) */
+.all-set-content {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.all-set-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #f0f4f1;
+  color: #2D4735;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin: 0 auto 24px;
+}
+
+.go-dashboard-btn {
+  display: inline-block;
+  padding: 14px 32px;
+  background: #2D4735;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 12px;
+  transition: all 0.2s;
+}
+
+.go-dashboard-btn:hover {
+  background: #243a2c;
+  color: #fff;
+}
+
+.onboarding-control{
+   height: 52px !important;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .onboarding-sidebar {
+    display: none;
+  }
+  
+  .onboarding-right-side {
+    display: none !important;
+  }
+  
+  .track-options-grid,
+  .email-providers {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .onboarding-header {
+    padding: 16px 20px;
+  }
+  
+  .onboarding-content {
+    padding: 20px;
+  }
+  
+  .invite-row {
+    flex-direction: column;
+  }
+  
+  .role-select {
+    width: 100%;
+  }
+  
+  .send-invites-btn {
+    float: none;
+    width: 100%;
+  }
+}
