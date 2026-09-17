@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiCheckCircle } from 'react-icons/fi';
+import { FiMoreHorizontal, FiCheckCircle } from 'react-icons/fi';
 import '../../styles/onboarding.css';
 
 export default function GoToDashboard() {
@@ -14,31 +14,58 @@ export default function GoToDashboard() {
 
   return (
     <div className="onboarding-page">
-      <div className="onboarding-sidebar">
-        <div className="sidebar-steps">
-          {steps.map((step) => (
-            <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
-              <div className="step-circle">{step.completed ? '✓' : step.num}</div>
-              <span className="step-label">{step.label}</span>
+      <div className="container">
+        <div className="row">
+          <div className="col-lg-12">
+            <div className="onboarding-header">
+              <div>
+                <Link to="/" className="sidebar-brand">ORDR</Link>
+              </div>
+              <div>
+                <button className="header-more-btn"><FiMoreHorizontal /></button>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="onboarding-main">
-        <div className="onboarding-header">
-          <Link to="/onboarding/team" className="back-arrow"><FiArrowLeft /></Link>
-          <span className="step-counter">5 of 5</span>
-        </div>
-
-        <div className="onboarding-content centered">
-          <div className="all-set-content">
-            <div className="all-set-icon">
-              <FiCheckCircle />
+          <div className="col-lg-3 col-xl-2 onboarding-sidebar">
+            <div className="sidebar-steps">
+              {steps.map((step, index) => (
+                <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
+                  <div className="step-circle">{step.completed ? '✓' : step.num}</div>
+                  <span className="step-label">{step.label}</span>
+                  {index < steps.length - 1 && <div className="step-line"></div>}
+                </div>
+              ))}
             </div>
-            <h1 className="onboarding-heading">All set!</h1>
-            <p className="onboarding-desc">You're ready to start tracking your orders. Your workspace is set up and ready to go.</p>
-            <Link to="/" className="go-dashboard-btn">Go to Dashboard</Link>
+          </div>
+
+          <div className="col-lg-5 col-xl-6">
+            <div className="onboarding-content">
+              <div className="all-set-content">
+                <div className="all-set-icon">
+                  <FiCheckCircle size={48} />
+                </div>
+                <h1 className="onboarding-heading">All set!</h1>
+                <p className="onboarding-desc">You're ready to start tracking your orders. Your workspace is set up and ready to go.</p>
+                <Link to="/" className="thm-lg-btn d-inline-block">Go to Dashboard</Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+            <div className="info-card">
+              <div className="info-card-icon">
+                <FiCheckCircle size={56} color="#2D4735" />
+              </div>
+              <h4 className="info-card-title">You're<br />all set!</h4>
+              <ul className="info-card-list">
+                <li><span className="check-icon">✓</span> Company configured</li>
+                <li><span className="check-icon">✓</span> Tracking enabled</li>
+                <li><span className="check-icon">✓</span> Inbox connected</li>
+                <li><span className="check-icon">✓</span> Team invited</li>
+                <li><span className="check-icon">✓</span> Ready to go</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

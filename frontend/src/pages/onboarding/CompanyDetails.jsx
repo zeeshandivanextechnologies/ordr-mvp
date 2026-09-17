@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiMoreHorizontal, FiBuilding } from 'react-icons/fi';
+import { FiMoreHorizontal} from 'react-icons/fi';
 import '../../styles/onboarding.css';
+import { HiOfficeBuilding } from 'react-icons/hi';
 
 export default function CompanyDetails() {
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [country, setCountry] = useState('india');
+  const [timezone, setTimezone] = useState('IST');
 
   const steps = [
     { num: 1, label: 'Company Details', active: true },
@@ -50,7 +52,7 @@ export default function CompanyDetails() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6 ">
+          <div className="col-lg-5 col-xl-6">
 
 
             <div className="onboarding-content">
@@ -103,6 +105,26 @@ export default function CompanyDetails() {
                   </select>
                 </div>
 
+                <div className="custom-frm-bx">
+                  <label className="">Timezone</label>
+                  <select
+                    className="form-select onboarding-control"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                  >
+                    <option value="IST">IST (UTC +5:30) — India</option>
+                    <option value="GST">GST (UTC +4:00) — UAE</option>
+                    <option value="EST">EST (UTC -5:00) — USA (Eastern)</option>
+                    <option value="CST">CST (UTC -6:00) — USA (Central)</option>
+                    <option value="PST">PST (UTC -8:00) — USA (Pacific)</option>
+                    <option value="GMT">GMT (UTC +0:00) — UK</option>
+                    <option value="CET">CET (UTC +1:00) — Europe</option>
+                    <option value="JST">JST (UTC +9:00) — Japan</option>
+                    <option value="AEST">AEST (UTC +10:00) — Australia</option>
+                    <option value="SGT">SGT (UTC +8:00) — Singapore</option>
+                  </select>
+                </div>
+
                 <div className='mt-4'>
                   <button type="submit" className="thm-lg-btn w-100">Next</button>
                 </div>
@@ -113,7 +135,7 @@ export default function CompanyDetails() {
           <div className="col-lg-4 col-xl-4 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <FiBuilding size={56} color="#2D4735" />
+                <HiOfficeBuilding size={56} color="#2D4735" />
               </div>
               <h4 className="info-card-title">A smarter<br />way to track<br />your orders</h4>
               <ul className="info-card-list">

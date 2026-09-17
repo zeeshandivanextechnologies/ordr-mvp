@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiPlus } from 'react-icons/fi';
+import { FiMoreHorizontal, FiPlus, FiUsers } from 'react-icons/fi';
 import '../../styles/onboarding.css';
 
 export default function InviteTeam() {
@@ -35,58 +35,102 @@ export default function InviteTeam() {
 
   return (
     <div className="onboarding-page">
-      <div className="onboarding-sidebar">
-        <div className="sidebar-steps">
-          {steps.map((step) => (
-            <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
-              <div className="step-circle">{step.completed ? '✓' : step.num}</div>
-              <span className="step-label">{step.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="onboarding-main">
-        <div className="onboarding-header">
-          <Link to="/onboarding/gmail" className="back-arrow"><FiArrowLeft /></Link>
-          <span className="step-counter">4 of 5</span>
-        </div>
-
-        <div className="onboarding-content centered">
-          <h1 className="onboarding-heading">Invite your team</h1>
-          <p className="onboarding-desc">Work together, keep everyone updated.</p>
-
-          <div className="invite-form">
-            {invites.map((invite, index) => (
-              <div className="invite-row" key={index}>
-                <input
-                  type="email"
-                  className="form-control"
-                  placeholder="colleague@company.com"
-                  value={invite.email}
-                  onChange={(e) => updateInvite(index, 'email', e.target.value)}
-                />
-                <select
-                  className="form-select role-select"
-                  value={invite.role}
-                  onChange={(e) => updateInvite(index, 'role', e.target.value)}
-                >
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
-                </select>
+      <div className="container">
+        <div className="row">
+          <div className="col-lg-12">
+            <div className="onboarding-header">
+              <div>
+                <Link to="/" className="sidebar-brand">ORDR</Link>
               </div>
-            ))}
-
-            <button type="button" className="add-another-btn" onClick={addInvite}>
-              <FiPlus /> Add another
-            </button>
+              <div>
+                <button className="header-more-btn"><FiMoreHorizontal /></button>
+              </div>
+            </div>
           </div>
 
-          <button type="button" className="send-invites-btn">Send Invites</button>
+          <div className="col-lg-3 col-xl-2 onboarding-sidebar">
+            <div className="sidebar-steps">
+              {steps.map((step, index) => (
+                <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
+                  <div className="step-circle">{step.completed ? '✓' : step.num}</div>
+                  <span className="step-label">{step.label}</span>
+                  {index < steps.length - 1 && <div className="step-line"></div>}
+                </div>
+              ))}
+            </div>
+          </div>
 
-          <div className="onboarding-nav">
-            <Link to="/onboarding/gmail" className="nav-back">Back</Link>
-            <div></div>
+          <div className="col-lg-5 col-xl-6">
+            <div className="onboarding-content">
+              <h1 className="onboarding-heading">Invite your team</h1>
+              <p className="onboarding-desc">Work together, keep everyone updated.</p>
+
+              <div className="invite-form">
+                {invites.map((invite, index) => (
+
+                  <div className='row'  key={index}>
+                    <div className='col-lg-8' >
+                      <div className="custom-frm-bx">
+                    <input
+                      type="email"
+                      className="form-control onboarding-control"
+                      placeholder="colleague@company.com"
+                      value={invite.email}
+                      onChange={(e) => updateInvite(index, 'email', e.target.value)}
+                    />
+                   
+                  </div>
+
+                    </div>
+                    <div className='col-lg-4'>
+                       <div className="custom-frm-bx">
+                 
+                    <select
+                      className="form-select onboarding-control role-select"
+                      value={invite.role}
+                      onChange={(e) => updateInvite(index, 'role', e.target.value)}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                    </select>
+                  </div>
+
+                    </div>
+                  </div>
+
+                  
+                ))}
+
+                <button type="button" className="add-another-btn" onClick={addInvite}>
+                  <FiPlus /> Add another
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <button type="button" className="thm-lg-btn w-100">Send Invites</button>
+              </div>
+
+              <div className="onboarding-nav">
+                <Link to="/onboarding/gmail" className="nav-back">Back</Link>
+                <Link to="/onboarding/dashboard" className="nav-skip">Skip for now</Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+            <div className="info-card">
+              <div className="info-card-icon">
+                <FiUsers size={56} color="#2D4735" />
+              </div>
+              <h4 className="info-card-title">Collaborate<br />with your team</h4>
+              <ul className="info-card-list">
+                <li><span className="check-icon">✓</span> Admin access</li>
+                <li><span className="check-icon">✓</span> Member roles</li>
+                <li><span className="check-icon">✓</span> Real-time updates</li>
+                <li><span className="check-icon">✓</span> Shared workspace</li>
+                <li><span className="check-icon">✓</span> Easy management</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

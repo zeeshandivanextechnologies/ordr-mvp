@@ -169,7 +169,7 @@ export default function Home() {
             <a href="#faq" className="nav-link-custom">FAQ</a>
           </div>
           <div className="d-flex gap-3">
-            <Link to="/login" className="thm-btn outline d-none d-sm-inline-block ">Login</Link>
+            <Link to="/login" className="thm-btn outline  ">Login</Link>
             <Link to="/signup" className="thm-btn ">Get Started</Link>
           </div>
         </div>
@@ -229,7 +229,7 @@ export default function Home() {
       <section className="input-methods-section">
         <div className="container">
           <div className="text-center">
-            <h2 className="section-title">3 Ways to Get Your Orders In</h2>
+            <h2 className="new-section-title">3 Ways to Get Your Orders In</h2>
             <p className="section-subtitle">Choose the method that works best for your business.</p>
           </div>
           <div className="row g-4">
@@ -265,7 +265,7 @@ export default function Home() {
       <section id="features" className="features-section">
         <div className="container">
           <div className="text-center">
-            <h2 className="section-title">How ORDR Works</h2>
+            <h2 className="new-section-title">How ORDR Works</h2>
             <p className="section-subtitle">A seamless workflow designed to eliminate manual data entry.</p>
           </div>
           <div className="row g-4">
@@ -305,7 +305,7 @@ export default function Home() {
       <section id="how-it-works" className="detailed-features-section">
         <div className="container">
           <div className="text-center">
-            <h2 className="section-title">Everything You Need to Manage Orders</h2>
+            <h2 className="new-section-title">Everything You Need to Manage Orders</h2>
             <p className="section-subtitle">Powerful features designed for B2B businesses.</p>
           </div>
           <div className="row g-4">
@@ -358,11 +358,11 @@ export default function Home() {
       {/* Pricing */}
       <section id="pricing" className="pricing-section">
         <div className="container">
-          <div className="text-center mb-5">
-            <h2 className="section-title">Simple, Transparent Pricing</h2>
+          <div className="text-center mb-lg-5 mb-0">
+            <h2 className="new-section-title">Simple, Transparent Pricing</h2>
             <p className="section-subtitle">Start free for 14 days. No credit card required.</p>
           </div>
-          <div className="row g-4 justify-content-center">
+          <div className="row justify-content-center">
             <div className="col-lg-3 col-md-6">
               <div className="pricing-card-new">
               <div>
@@ -477,7 +477,7 @@ export default function Home() {
       <section id="testimonials" className="testimonials-section">
         <div className="container">
           <div className="text-center">
-            <h2 className="section-title">Trusted by Fast-Growing Businesses</h2>
+            <h2 className="new-section-title">Trusted by Fast-Growing Businesses</h2>
             <p className="section-subtitle">See what our users are saying about ORDR.</p>
           </div>
           <div className="splide" ref={splideRef}>
@@ -513,7 +513,7 @@ export default function Home() {
       <section id="faq" className="faq-section">
         <div className="container">
           <div className="text-center">
-            <h2 className="section-title">Frequently Asked Questions</h2>
+            <h2 className="new-section-title">Frequently Asked Questions</h2>
             <p className="section-subtitle">Everything you need to know about getting started.</p>
           </div>
           <div className="row justify-content-center">

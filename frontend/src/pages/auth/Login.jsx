@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
 import '../../styles/auth.css';
@@ -79,7 +79,8 @@ export default function Login() {
                 </div>
                 
                <div className='my-3'>
-                  <button type="submit" className="thm-lg-btn w-100 text-center">Sign In</button>
+                  {/* <button type="submit" className="thm-lg-btn w-100 text-center">Sign In</button> */}
+                  <NavLink to="/member/dashboard" className="thm-lg-btn w-100 text-center">Sign In</NavLink>
                </div>
                 
                 <div className="divider">or</div>

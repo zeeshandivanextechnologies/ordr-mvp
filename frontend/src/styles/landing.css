@@ -191,7 +191,7 @@ background: linear-gradient(180deg, #f8faf9 0%, #e5f0e8 50%, #f8faf9 100%);
   background-color: #fff;
 }
 
-.section-title {
+.new-section-title {
   font-size: 42px;
   font-weight: 700;
   margin-bottom: 10px;
@@ -869,7 +869,7 @@ background: linear-gradient(180deg, #f8faf9 0%, #e5f0e8 50%, #f8faf9 100%);
 
 @media (max-width: 768px) {
   .hero-section {
-    padding: 60px 0 50px;
+    padding: 30px 0;
   }
 
   .hero-title {
@@ -899,15 +899,21 @@ background: linear-gradient(180deg, #f8faf9 0%, #e5f0e8 50%, #f8faf9 100%);
   }
 
   .stat-box {
-    margin-bottom: 30px;
+    margin-bottom: 16px;
   }
 
   .stat-box:last-child {
     margin-bottom: 0;
   }
 
-  .section-title {
-    font-size: 32px;
+  .new-section-title {
+    font-size: 28px;
+    margin-bottom: 0;
+  }
+
+  .section-subtitle{
+    font-size: 16px;
+    margin-bottom: 10px;
   }
 
   .input-method-card {

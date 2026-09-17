@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft } from 'react-icons/fi';
+import { FiMoreHorizontal, FiMail } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
 import '../../styles/onboarding.css';
 
@@ -15,66 +15,82 @@ export default function ConnectGmail() {
 
   return (
     <div className="onboarding-page">
-      <div className="onboarding-sidebar">
-        <div className="sidebar-steps">
-          {steps.map((step) => (
-            <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
-              <div className="step-circle">{step.completed ? '✓' : step.num}</div>
-              <span className="step-label">{step.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="onboarding-main">
-        <div className="onboarding-header">
-          <Link to="/onboarding/track" className="back-arrow"><FiArrowLeft /></Link>
-          <span className="step-counter">3 of 5</span>
-        </div>
-
-        <div className="onboarding-content centered">
-          <h1 className="onboarding-heading">Connect your inbox</h1>
-          <p className="onboarding-desc">We'll scan your emails to find orders, confirmations and delivery updates.</p>
-
-          <div className="email-providers">
-            <div className="provider-card recommended">
-              <div className="provider-logo gmail-logo">
-                <svg width="40" height="40" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M6 12l18 13L42 12v-2c0-2-1.5-4-4-4H10C7 6 5 8 5 10v2z"/>
-                  <path fill="#4285F4" d="M42 12l-18 13L6 12"/>
-                  <path fill="#34A853" d="M6 36V12l18 13"/>
-                  <path fill="#FBBC05" d="M42 36V12L24 25"/>
-                  <rect fill="#C5221F" x="5" y="36" width="38" height="2" rx="1"/>
-                </svg>
+      <div className="container">
+        <div className="row">
+          <div className="col-lg-12">
+            <div className="onboarding-header">
+              <div>
+                <Link to="/" className="sidebar-brand">ORDR</Link>
               </div>
-              <h5>Gmail</h5>
-              <span className="provider-badge recommended-badge">Recommended</span>
-              <button className="provider-btn primary">Connect Gmail</button>
-            </div>
-
-            <div className="provider-card coming-soon">
-              <div className="provider-logo outlook-logo">
-                <svg width="40" height="40" viewBox="0 0 48 48">
-                  <rect x="4" y="8" width="28" height="32" rx="2" fill="#0078D4"/>
-                  <ellipse cx="18" cy="24" rx="8" ry="10" fill="#fff"/>
-                  <rect x="28" y="12" width="16" height="24" rx="2" fill="#0364B8"/>
-                  <path fill="#1490DF" d="M28 12l8 4v16l-8-4"/>
-                </svg>
+              <div>
+                <button className="header-more-btn"><FiMoreHorizontal /></button>
               </div>
-              <h5>Outlook</h5>
-              <span className="provider-badge coming-soon-badge">Coming soon</span>
-              <button className="provider-btn outline" disabled>Notify me</button>
             </div>
           </div>
 
-          <div className="provider-features">
-            <div className="feature-check"><span className="check-icon">✓</span> Secure & read-only</div>
-            <div className="feature-check"><span className="check-icon">✓</span> Finds orders automatically</div>
+          <div className="col-lg-3 col-xl-2 onboarding-sidebar">
+            <div className="sidebar-steps">
+              {steps.map((step, index) => (
+                <div key={step.num} className={`sidebar-step ${step.active ? 'active' : ''} ${step.completed ? 'completed' : ''}`}>
+                  <div className="step-circle">{step.completed ? '✓' : step.num}</div>
+                  <span className="step-label">{step.label}</span>
+                  {index < steps.length - 1 && <div className="step-line"></div>}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="onboarding-nav">
-            <Link to="/onboarding/track" className="nav-back">Back</Link>
-            <Link to="/onboarding/team" className="nav-skip">Skip for now</Link>
+          <div className="col-lg-5 col-xl-6">
+            <div className="onboarding-content">
+              <h1 className="onboarding-heading">Connect your inbox</h1>
+              <p className="onboarding-desc">We'll scan your emails to find orders, confirmations and delivery updates.</p>
+
+              <div className="email-providers">
+                <div className="provider-card recommended">
+                  <div className="provider-logo">
+                    <FcGoogle size={40} />
+                  </div>
+                  <h5>Gmail</h5>
+                  <span className="provider-badge recommended-badge">Recommended</span>
+                  <button className="provider-btn primary">Connect Gmail</button>
+                </div>
+
+                <div className="provider-card coming-soon">
+                  <div className="provider-logo">
+                    <FiMail size={40} color="#0078D4" />
+                  </div>
+                  <h5>Outlook</h5>
+                  <span className="provider-badge coming-soon-badge">Coming soon</span>
+                  <button className="provider-btn outline" disabled>Notify me</button>
+                </div>
+              </div>
+
+              <div className="provider-features">
+                <div className="feature-check"><span className="check-icon">✓</span> Secure & read-only</div>
+                <div className="feature-check"><span className="check-icon">✓</span> Finds orders automatically</div>
+              </div>
+
+              <div className="onboarding-nav">
+                <Link to="/onboarding/track" className="nav-back">Back</Link>
+                <Link to="/onboarding/team" className="nav-skip">Skip for now</Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+            <div className="info-card">
+              <div className="info-card-icon">
+                <FiMail size={56} color="#2D4735" />
+              </div>
+              <h4 className="info-card-title">Smart email<br />scanning</h4>
+              <ul className="info-card-list">
+                <li><span className="check-icon">✓</span> Read-only access</li>
+                <li><span className="check-icon">✓</span> AI detects orders</li>
+                <li><span className="check-icon">✓</span> Extracts details</li>
+                <li><span className="check-icon">✓</span> Secure & private</li>
+                <li><span className="check-icon">✓</span> No spam ever</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
