@@ -169,7 +169,7 @@
 
 
 .statsBar {
-  background-color: rgba(134, 134, 134, 0.8);
+  background-color: var(--primary-color);
   display: flex;
   justify-content: space-between;
   padding: 20px 40px;

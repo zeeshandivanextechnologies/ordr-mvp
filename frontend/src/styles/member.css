@@ -1331,7 +1331,17 @@
   color: var(--text-color);
 }
 
+.connected-box{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
+.connected-details{
+  display: flex;
+  align-items: center ;
+  gap: 16px;
+}
 
 /* Document Item */
 .document-item {
@@ -2265,7 +2275,17 @@
 }
 
 
-@media (max-width: 576px) {}
+@media (max-width: 576px) {
+  .connected-box{
+    flex-wrap: wrap-reverse;
+    gap: 5px;
+    justify-content: end;
+  }
+
+  .connected-details{
+    width: 100%;
+  }
+}
 
 
 /* Print Styles */

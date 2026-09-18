@@ -277,8 +277,8 @@ export default function AdminSettings() {
               {activeTab === 'connected' && (
                 <div className="row">
                   <div className="col-md-6 mb-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center gap-3">
+                    <div className=" connected-box">
+                        <div className="connected-details">
                           <div className="kpi-icon" style={{ background: '#e3f2fd', color: '#1565c0' }}>
                             <FiMail />
                           </div>
@@ -291,8 +291,8 @@ export default function AdminSettings() {
                       </div>
                   </div>
                   <div className="col-md-6 mb-3">
-                   <div className="d-flex justify-content-between align-items-center">
-                        <div className="d-flex align-items-center gap-3">
+                   <div className=" connected-box">
+                        <div className="connected-details">
                           <div className="kpi-icon" style={{ background: '#f5f5f5', color: '#9e9e9e' }}>
                             <FiMail />
                           </div>
