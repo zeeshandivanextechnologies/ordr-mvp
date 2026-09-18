@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
+import { exportToCSV, printPage } from '../../utils/exportUtils';
 import '../../styles/member.css';
 import { LuChevronDown } from 'react-icons/lu';
 
@@ -53,11 +54,28 @@ export default function Orders() {
     delivered: 'Delivered',
   };
 
+  const salesCount = orders.filter(o => o.type === 'sales').length;
+  const purchaseCount = orders.filter(o => o.type === 'purchase').length;
+
   const filteredOrders = orders.filter((o) => {
     const matchesTab = activeTab === 'all' || o.type === activeTab;
     const matchesFilter = filter === 'all' || o.status === filter;
     return matchesTab && matchesFilter;
   });
+
+  const handleExport = () => {
+    const data = filteredOrders.map((o, i) => ({
+      'Sr No.': i + 1,
+      'Customer/Supplier': o.customer,
+      'PO': o.po,
+      'Material': o.material,
+      'Quantity': o.qty,
+      'Order Value': o.value,
+      'Due Date': o.due,
+      'Status': statusLabels[o.status],
+    }));
+    exportToCSV(data, `${activeTab}_orders`);
+  };
 
   return (
     <>
@@ -68,20 +86,36 @@ export default function Orders() {
           <h2>Orders</h2>
           <p>Manage your sales and purchase orders</p>
         </div>
-                    <div className="position-relative" ref={actionRef}>
-          <button className="thm-btn fz-14 p-2" onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}>
-            <FiPlus /> New Order <FiChevronDown />
+        <div className="d-flex gap-2">
+          {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+            <FiDownload /> Export
           </button>
-          {showDropdown && (
-            <div className="order-dropdown-menu">
-              <Link to="/member/orders/add" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
-                <FiEdit2 /> Add Manually
-              </Link>
-              <Link to="/member/orders/upload" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
-                <FiUpload /> Upload PO
-              </Link>
-            </div>
-          )}
+          <button className="thm-btn outline fz-14 p-2" onClick={() => printPage(`${activeTab === 'sales' ? 'Sales' : 'Purchase'} Orders`, '.member-card .table-responsive')}>
+            <FiPrinter /> Print
+          </button> */}
+
+          <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+            <FiDownload /> Export
+          </button>
+          <button className="thm-btn outline fz-14 p-2" >
+            <FiPrinter /> Print
+          </button>
+
+          <div className="position-relative" ref={actionRef}>
+            <button className="thm-btn fz-14 p-2" onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}>
+              <FiPlus /> New Order <FiChevronDown />
+            </button>
+            {showDropdown && (
+              <div className="order-dropdown-menu">
+                <Link to="/app/orders/add" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
+                  <FiEdit2 /> Add Manually
+                </Link>
+                <Link to="/app/orders/upload" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
+                  <FiUpload /> Upload PO
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -96,13 +130,13 @@ export default function Orders() {
           className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
           onClick={() => setActiveTab('sales')}
         >
-          Sales Orders
+          Sales Orders ({salesCount})
         </button>
         <button
           className={`tab-btn ${activeTab === 'purchase' ? 'active' : ''}`}
           onClick={() => setActiveTab('purchase')}
         >
-          Purchase Orders
+          Purchase Orders ({purchaseCount})
         </button>
       </div>
 
@@ -178,7 +212,7 @@ export default function Orders() {
                       </button>
                       {openAction === idx && (
                         <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
-                          <Link to={`/member/orders/${idx + 1}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                          <Link to={`/app/orders/${idx + 1}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                             <FiEye /> View Details
                           </Link>
                           <Link to="#" className="order-dropdown-item">

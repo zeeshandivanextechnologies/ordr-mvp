@@ -39,7 +39,7 @@ export default function GoToDashboard() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6">
+          <div className="col-lg-6 col-xl-7">
             <div className="onboarding-content">
               <div className="all-set-content">
                 <div className="all-set-icon">
@@ -52,12 +52,12 @@ export default function GoToDashboard() {
             </div>
           </div>
 
-          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+          <div className="col-lg-3 col-xl-3 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <FiCheckCircle size={56} color="#2D4735" />
+                <FiCheckCircle size={48} color="#201d6a" />
               </div>
-              <h4 className="info-card-title">You're<br />all set!</h4>
+              <h4 className="info-card-title">You're all set!</h4>
               <ul className="info-card-list">
                 <li><span className="check-icon">✓</span> Company configured</li>
                 <li><span className="check-icon">✓</span> Tracking enabled</li>

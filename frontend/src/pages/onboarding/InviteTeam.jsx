@@ -60,7 +60,7 @@ export default function InviteTeam() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6">
+          <div className="col-lg-6 col-xl-7">
             <div className="onboarding-content">
               <h1 className="onboarding-heading">Invite your team</h1>
               <p className="onboarding-desc">Work together, keep everyone updated.</p>
@@ -69,7 +69,7 @@ export default function InviteTeam() {
                 {invites.map((invite, index) => (
 
                   <div className='row'  key={index}>
-                    <div className='col-lg-8' >
+                    <div className='col-8 col-lg-8 col-md-8 col-sm-8' >
                       <div className="custom-frm-bx">
                     <input
                       type="email"
@@ -82,7 +82,7 @@ export default function InviteTeam() {
                   </div>
 
                     </div>
-                    <div className='col-lg-4'>
+                    <div className='col-4 col-lg-4 col-md-4 col-sm-4'>
                        <div className="custom-frm-bx">
                  
                     <select
@@ -106,7 +106,7 @@ export default function InviteTeam() {
                 </button>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-3">
                 <button type="button" className="thm-lg-btn w-100">Send Invites</button>
               </div>
 
@@ -117,12 +117,12 @@ export default function InviteTeam() {
             </div>
           </div>
 
-          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+          <div className="col-lg-3 col-xl-3 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <FiUsers size={56} color="#2D4735" />
+                <FiUsers size={48} color="#201d6a" />
               </div>
-              <h4 className="info-card-title">Collaborate<br />with your team</h4>
+              <h4 className="info-card-title">Collaborate with your team</h4>
               <ul className="info-card-list">
                 <li><span className="check-icon">✓</span> Admin access</li>
                 <li><span className="check-icon">✓</span> Member roles</li>

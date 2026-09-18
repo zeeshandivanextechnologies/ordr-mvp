@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiDownload, FiFile, FiShoppingBag, FiTruck, FiCheckCircle, FiBox, FiPlus } from 'react-icons/fi';
+import { FiArrowLeft, FiDownload, FiFile, FiShoppingBag, FiTruck, FiCheckCircle, FiBox, FiPlus, FiPrinter } from 'react-icons/fi';
+import { printPage } from '../../utils/exportUtils';
 import '../../styles/member.css';
 
 export default function OrderDetail() {
@@ -21,6 +22,9 @@ export default function OrderDetail() {
             <div className="d-flex align-items-center gap-3">
               <span className="order-value">₹6,20,000</span>
               <span className="status-badge partially-dispatched">Partially Dispatched</span>
+              {/* <button className="thm-btn outline fz-14 p-2" onClick={() => printPage('Order Detail - PO-8192')}>
+                <FiPrinter /> Print
+              </button> */}
             </div>
           </div>
         </div>
@@ -91,7 +95,7 @@ export default function OrderDetail() {
                 <div>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <h6 className="fz-20 mb-0">Shipments</h6>
-                    <Link to="/member/orders/1/shipments/add" className="thm-btn p-2 fz-14">
+                    <Link to="/app/orders/1/shipments/add" className="thm-btn p-2 fz-14">
                       <FiPlus /> Add Shipment
                     </Link>
                   </div>

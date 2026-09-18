@@ -1,18 +1,15 @@
 import '../styles/member.css';
+import '../styles/loader.css';
 
 export default function PageLoader() {
   return (
-    <div className="page-loader">
-      <div className="loader-content">
-        <div className="loader-circle">
-          <div className="loader-circle-segment"></div>
-          <div className="loader-circle-segment"></div>
-          <div className="loader-circle-segment"></div>
+    <div className="premium-page-loader">
+      <div className="premium-loader-content">
+        <div className="premium-loader-ring">
+          <div className="premium-inner-dot"></div>
         </div>
-        <div className="loader-brand">
-          {/* <span className="loader-logo">O</span>
-          <span className="loader-dash">—</span> */}
-          <span className="loader-name">ORDR</span>
+        <div className="premium-loader-brand">
+          <span className="premium-loader-name">ORDR</span>
         </div>
       </div>
     </div>

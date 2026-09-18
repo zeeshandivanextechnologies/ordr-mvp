@@ -165,7 +165,7 @@ export default function AIOrderInbox() {
                             </button>
                             {openAction === idx && (
                               <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
-                                <Link to={`/member/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                                <Link to={`/app/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                   <FiEye /> Review
                                 </Link>
                                 <Link to="#" className="order-dropdown-item">

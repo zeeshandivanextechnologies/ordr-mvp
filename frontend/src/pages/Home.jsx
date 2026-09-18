@@ -363,7 +363,7 @@ export default function Home() {
             <p className="section-subtitle">Start free for 14 days. No credit card required.</p>
           </div>
           <div className="row justify-content-center">
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-3 col-md-6 mb-3">
               <div className="pricing-card-new">
               <div>
                   <div className="pricing-card-icon-new">
@@ -388,7 +388,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-3 col-md-6 mb-3">
               <div className="pricing-card-new pricing-popular-new">
                <div>
                  <div className="pricing-badge-new">Most Popular</div>
@@ -417,7 +417,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-3 col-md-6 mb-3">
               <div className="pricing-card-new">
                 <div>
                   <div className="pricing-card-icon-new">
@@ -444,7 +444,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="col-lg-3 col-md-6">
+            <div className="col-lg-3 col-md-6 mb-3">
               <div className="pricing-card-new">
                <div>
                  <div className="pricing-card-icon-new">

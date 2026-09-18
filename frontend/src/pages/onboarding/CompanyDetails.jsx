@@ -52,7 +52,7 @@ export default function CompanyDetails() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6">
+          <div className="col-lg-6 col-xl-7">
 
 
             <div className="onboarding-content">
@@ -125,19 +125,19 @@ export default function CompanyDetails() {
                   </select>
                 </div>
 
-                <div className='mt-4'>
+                <div className='mt-3'>
                   <button type="submit" className="thm-lg-btn w-100">Next</button>
                 </div>
               </form>
             </div>
           </div>
 
-          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+          <div className="col-lg-3 col-xl-3 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <HiOfficeBuilding size={56} color="#2D4735" />
+                <HiOfficeBuilding size={48} color="#201d6a" />
               </div>
-              <h4 className="info-card-title">A smarter<br />way to track<br />your orders</h4>
+              <h4 className="info-card-title">A smarter way to track your orders</h4>
               <ul className="info-card-list">
                 <li><span className="check-icon">✓</span> Sales orders</li>
                 <li><span className="check-icon">✓</span> Purchase orders</li>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSearch, FiChevronDown, FiEye, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiChevronDown, FiEye, FiEdit2, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
+import { exportToCSV, printPage } from '../../utils/exportUtils';
 import '../../styles/member.css';
 
 export default function Tracking() {
@@ -41,10 +42,10 @@ export default function Tracking() {
   };
 
   const tabs = [
-    { key: 'all', label: 'All' },
-    { key: 'in-transit', label: 'In Transit' },
-    { key: 'delayed', label: 'Delayed' },
-    { key: 'delivered', label: 'Delivered' },
+    { key: 'all', label: 'All', count: shipments.filter(s => true).length },
+    { key: 'in-transit', label: 'In Transit', count: shipments.filter(s => s.status === 'in-transit').length },
+    { key: 'delayed', label: 'Delayed', count: shipments.filter(s => s.status === 'delayed').length },
+    { key: 'delivered', label: 'Delivered', count: shipments.filter(s => s.status === 'delivered').length },
   ];
 
   const filteredShipments = shipments.filter((s) => {
@@ -52,6 +53,20 @@ export default function Tracking() {
     const matchesFilter = filter === 'all' || s.status === filter;
     return matchesTab && matchesFilter;
   });
+
+  const handleExport = () => {
+    const data = filteredShipments.map((s, i) => ({
+      'Sr No.': i + 1,
+      'Customer/Supplier': s.customer,
+      'PO': s.po,
+      'LR/AWB': s.lrAwb,
+      'Route': s.route,
+      'ETA': s.eta,
+      'Status': statusLabels[s.status],
+      'Last Updated': s.lastUpdated,
+    }));
+    exportToCSV(data, 'shipments');
+  };
 
   return (
     <>
@@ -61,6 +76,14 @@ export default function Tracking() {
             <div>
               <h2>Tracking</h2>
               <p>Track all your shipments in one place</p>
+            </div>
+            <div className="d-flex gap-2">
+              {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+                <FiDownload /> Export
+              </button>
+              <button className="thm-btn outline fz-14 p-2" onClick={() => printPage('Shipments Tracking')}>
+                <FiPrinter /> Print
+              </button> */}
             </div>
           </div>
         </div>
@@ -75,7 +98,7 @@ export default function Tracking() {
                 className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
               >
-                {tab.label}
+                {tab.label} ({tab.count})
               </button>
             ))}
           </div>
@@ -148,7 +171,7 @@ export default function Tracking() {
                           </button>
                           {openAction === idx && (
                             <div className="order-dropdown-menu" style={{  minWidth : "auto" }}>
-                              <Link to={`/member/shipments/${shipment.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                              <Link to={`/app/shipments/${shipment.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                 <FiEye /> View Details
                               </Link>
                               <Link to="#" className="order-dropdown-item">

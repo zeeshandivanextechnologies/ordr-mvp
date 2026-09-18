@@ -96,7 +96,7 @@ export default function ShipmentDetail() {
                   { label: 'Dispatch Date', value: shipment.dispatchDate },
                   { label: 'Expected Delivery Date', value: shipment.expectedDeliveryDate },
                 ].map((item, idx) => (
-                  <div className="col-md-6 mb-3" key={idx}>
+                  <div className="col-md-6 col-lg-6 col-sm-12 mb-3" key={idx}>
                     <div className="details-box">
                       <h6>{item.label}</h6>
                       <h5>{item.value}</h5>

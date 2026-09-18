@@ -38,7 +38,7 @@ export default function ForgotPassword() {
                   </div>
                 </div>
                 
-                <div className=''>
+                <div className='mt-3'>
                   <button type="submit" className="thm-lg-btn w-100 text-center">Send Reset Link</button>
                 </div>
                 
@@ -52,7 +52,8 @@ export default function ForgotPassword() {
           <div className="col-lg-6 col-md-12 col-sm-12 d-none d-md-block">
             <div className="authImage">
               <div className="imageOverlayText">
-                More<br/>control.<br/>Smoother<br/>business.
+              
+                  <p>More control. <span className='d-lg-block d-sm-inline'>Smoother business.</span></p>
               </div>
               <div className="statsBar">
                 <div className="statItem">

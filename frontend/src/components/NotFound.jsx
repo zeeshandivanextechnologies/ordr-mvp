@@ -12,7 +12,7 @@ export default function NotFound() {
         <h1 className="error-code">404</h1>
         <h3 className="mb-2">Page Not Found</h3>
         <p className="text-muted mb-4">The page you're looking for doesn't exist or has been moved.</p>
-        <Link to="/member/dashboard" className="thm-btn">
+        <Link to="/app/dashboard" className="thm-btn">
           <FiHome /> Go to Dashboard
         </Link>
       </div>

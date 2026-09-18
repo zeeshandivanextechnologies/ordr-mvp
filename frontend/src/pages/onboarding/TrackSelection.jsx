@@ -49,7 +49,7 @@ export default function TrackSelection() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6">
+          <div className="col-lg-6 col-xl-7">
             <div className="onboarding-content">
               <h1 className="onboarding-heading">What do you track?</h1>
               <p className="onboarding-desc">Select the order types you want to manage.</p>
@@ -74,7 +74,7 @@ export default function TrackSelection() {
                 </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-3">
                 <Link
                   to="/onboarding/gmail"
                   className={`thm-lg-btn d-block text-center ${selected.length === 0 ? 'disabled' : ''}`}
@@ -91,12 +91,12 @@ export default function TrackSelection() {
             </div>
           </div>
 
-          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+          <div className="col-lg-3 col-xl-3 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <FiShoppingCart size={56} color="#2D4735" />
+                <FiShoppingCart size={48} color="#201d6a" />
               </div>
-              <h4 className="info-card-title">Track both<br />types of orders</h4>
+              <h4 className="info-card-title">Track both types of orders</h4>
               <ul className="info-card-list">
                 <li><span className="check-icon">✓</span> Customer orders</li>
                 <li><span className="check-icon">✓</span> Supplier orders</li>

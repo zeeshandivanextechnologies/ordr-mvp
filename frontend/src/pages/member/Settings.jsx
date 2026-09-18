@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FiUser, FiMail, FiLock, FiBell, FiLink, FiSave } from 'react-icons/fi';
 import '../../styles/member.css';
 
-export default function Settings() {
+export default function MemberSettings() {
   const [activeTab, setActiveTab] = useState('profile');
 
   return (
@@ -54,13 +54,10 @@ export default function Settings() {
                     <div className="col-lg-6 col-md-6 col-sm-12" key={idx}>
                       <div className="custom-frm-bx">
                         <label>{item.label}</label>
-                        <input type={item.type} className="form-control" defaultValue={item.value} />
+                        <input type={item.type} className="form-control" defaultValue={item.value} readOnly />
                       </div>
                     </div>
                   ))}
-                  <div className="col-lg-12 text-end">
-                    <button className="thm-btn"><FiSave /> Save Changes</button>
-                  </div>
                 </div>
               )}
 
@@ -106,16 +103,13 @@ export default function Settings() {
                             <h6 className="text-muted">{item.desc}</h6>
                           </div>
                           <div className="theme-switch">
-                            <input type="checkbox" id={`switch-${idx}`} defaultChecked={idx < 2} />
-                            <label className="switch-slider" htmlFor={`switch-${idx}`}></label>
+                            <input type="checkbox" id={`member-switch-${idx}`} defaultChecked={idx < 2} />
+                            <label className="switch-slider" htmlFor={`member-switch-${idx}`}></label>
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
-                  <div className="col-lg-12 text-end">
-                    <button className="thm-btn"><FiSave /> Save Preferences</button>
-                  </div>
                 </div>
               )}
 

@@ -40,7 +40,7 @@ export default function ConnectGmail() {
             </div>
           </div>
 
-          <div className="col-lg-5 col-xl-6">
+          <div className="col-lg-6 col-xl-7">
             <div className="onboarding-content">
               <h1 className="onboarding-heading">Connect your inbox</h1>
               <p className="onboarding-desc">We'll scan your emails to find orders, confirmations and delivery updates.</p>
@@ -52,7 +52,7 @@ export default function ConnectGmail() {
                   </div>
                   <h5>Gmail</h5>
                   <span className="provider-badge recommended-badge">Recommended</span>
-                  <button className="provider-btn primary">Connect Gmail</button>
+                  <button className="thm-btn w-100">Connect Gmail</button>
                 </div>
 
                 <div className="provider-card coming-soon">
@@ -77,12 +77,12 @@ export default function ConnectGmail() {
             </div>
           </div>
 
-          <div className="col-lg-4 col-xl-4 onboarding-right-side">
+          <div className="col-lg-3 col-xl-3 onboarding-right-side">
             <div className="info-card">
               <div className="info-card-icon">
-                <FiMail size={56} color="#2D4735" />
+                <FiMail size={48} color="#201d6a" />
               </div>
-              <h4 className="info-card-title">Smart email<br />scanning</h4>
+              <h4 className="info-card-title">Smart email scanning</h4>
               <ul className="info-card-list">
                 <li><span className="check-icon">✓</span> Read-only access</li>
                 <li><span className="check-icon">✓</span> AI detects orders</li>

@@ -2,44 +2,44 @@ import { FiBell, FiMail, FiAlertCircle, FiPackage, FiClock, FiCheckCircle, FiTru
 import '../../styles/member.css';
 
 export default function Notifications() {
-  const notifications = [
-    {
-      id: 1,
-      icon: <FiMail />,
-      title: 'New order detected from ABC Industries',
-      description: 'AI has identified a new purchase order from your Gmail inbox. Review and confirm.',
-      time: '5 minutes ago',
-      unread: true,
-      color: '#1565c0',
-    },
-    {
-      id: 2,
-      icon: <FiClock />,
-      title: 'Delivery due tomorrow for PO-8192',
-      description: 'Shipment SHP-2026-4821 is scheduled for delivery tomorrow. Ensure all documents are ready.',
-      time: '1 hour ago',
-      unread: true,
-      color: '#e65100',
-    },
-    {
-      id: 3,
-      icon: <FiAlertCircle />,
-      title: 'Shipment delayed for PO-8195',
-      description: 'Shipment SHP-2026-4823 has been delayed. New ETA: 22 Sep 2026. Customer has been notified.',
-      time: '3 hours ago',
-      unread: false,
-      color: '#c62828',
-    },
-    {
-      id: 4,
-      icon: <FiPackage />,
-      title: 'AI review required for 2 orders',
-      description: '2 orders require your review before processing. AI suggestions are ready for your approval.',
-      time: '5 hours ago',
-      unread: false,
-      color: '#2D4735',
-    },
-  ];
+const notifications = [
+  {
+    id: 1,
+    icon: <FiMail />,
+    title: 'New Order Detected',
+    description: 'New purchase order detected. Review and confirm.',
+    time: '5 minutes ago',
+    unread: true,
+    color: '#1565c0',
+  },
+  {
+    id: 2,
+    icon: <FiClock />,
+    title: 'Delivery Due Tomorrow',
+    description: 'Shipment SHP-2026-4821 is due tomorrow.',
+    time: '1 hour ago',
+    unread: true,
+    color: '#e65100',
+  },
+  {
+    id: 3,
+    icon: <FiAlertCircle />,
+    title: 'Shipment Delayed',
+    description: 'Shipment SHP-2026-4823 has been delayed.',
+    time: '3 hours ago',
+    unread: false,
+    color: '#c62828',
+  },
+  {
+    id: 4,
+    icon: <FiPackage />,
+    title: 'AI Review Required',
+    description: '2 orders are waiting for your review.',
+    time: '5 hours ago',
+    unread: false,
+    color: '#2D4735',
+  },
+];
 
   return (
     <>

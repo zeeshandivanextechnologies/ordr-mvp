@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import TrialBanner from './TrialBanner';
 import '../../styles/layout.css';
 
 export default function AppLayout() {
@@ -30,6 +31,7 @@ export default function AppLayout() {
       
       <div className="main-content-wrapper">
         <Header toggleSidebar={toggleSidebar} />
+        <TrialBanner />
         
         <div className="page-content">
           <div className="container-fluid p-0">

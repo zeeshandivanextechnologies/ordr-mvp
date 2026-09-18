@@ -1,22 +1,29 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiHome, FiBox, FiTruck, FiMail, FiMap, FiLink, FiBell, FiX, FiLogOut, FiSettings } from 'react-icons/fi';
+import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings } from 'react-icons/fi';
+import { useAuth } from '../../Router';
 import '../../styles/member.css';
 import { MdLogout } from 'react-icons/md';
 
 export default function Sidebar({ isOpen, toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navLinks = [
-    { path: '/member/dashboard', label: 'Dashboard', icon: <FiHome /> },
-    { path: '/member/ai-inbox', label: 'AI Order Inbox', icon: <FiMail /> },
-    { path: '/member/orders', label: 'Orders', icon: <FiBox /> },
-    { path: '/member/tracking', label: 'Tracking', icon: <FiTruck /> },
-    { path: '/member/integrations', label: 'Integrations', icon: <FiLink /> },
-    { path: '/member/notifications', label: 'Notifications', icon: <FiBell /> },
-    { path: '/member/settings', label: 'Settings', icon: <FiSettings /> },
+    { path: '/app/dashboard', label: 'Dashboard', icon: <FiHome /> },
+    { path: '/app/ai-inbox', label: 'AI Order Inbox', icon: <FiMail /> },
+    { path: '/app/orders', label: 'Orders', icon: <FiBox /> },
+    { path: '/app/tracking', label: 'Tracking', icon: <FiTruck /> },
+    { path: '/app/integrations', label: 'Integrations', icon: <FiLink /> },
+    { path: '/app/notifications', label: 'Notifications', icon: <FiBell /> },
+    { path: '/app/alerts', label: 'Alerts', icon: <FiAlertTriangle /> },
+    { path: '/app/settings', label: 'Settings', icon: <FiSettings /> },
+  ];
+
+  const adminLinks = [
+    { path: '/app/billing', label: 'Billing', icon: <FiCreditCard /> },
   ];
 
   const handleLogoutClick = (e) => {
@@ -28,6 +35,8 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     setShowLogoutModal(false);
     navigate('/login');
   };
+
+  const allLinks = role === 'admin' ? [...navLinks, ...adminLinks] : navLinks;
 
   return (
     <>
@@ -41,12 +50,12 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
       <div className={`sidebar ${isOpen ? 'show' : 'closed'}`}>
         <div className="sidebar-header d-flex justify-content-between align-items-center w-100">
-          <Link to="/member/dashboard" className="sidebar-brand">ORDR</Link>
+          <Link to="/app/dashboard" className="sidebar-brand">ORDR</Link>
           <FiX className="d-lg-none fs-4 text-secondary" style={{ cursor: 'pointer' }} onClick={toggleSidebar} />
         </div>
 
         <div className="sidebar-menu">
-          {navLinks.map((link, index) => (
+          {allLinks.map((link, index) => (
             <Link
               key={index}
               to={link.path}

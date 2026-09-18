@@ -52,19 +52,19 @@ export default function Integrations() {
             </div>
             <div className="member-card-body">
               <div className="row">
-                <div className="col-12 mb-3">
+                <div className="col-lg-12">
                   <div className="d-flex align-items-center gap-3 mb-3">
                     <div className="kpi-icon" style={{ background: '#e3f2fd', color: '#1565c0' }}>
                       <FiMail />
                     </div>
-                    <div>
-                      <h6 className="mb-0">Gmail</h6>
-                      <small className="text-muted">Sync emails and detect orders automatically</small>
+                    <div className='integration-box'>
+                      <h6 className="">Gmail</h6>
+                      <p className="">Sync emails and detect orders automatically</p>
                     </div>
                   </div>
                 </div>
                 {gmailConnected && (
-                  <div className="col-12 mb-3">
+                  <div className="col-lg-12 mb-3">
                     <div className="details-box">
                       <h6>Last Scan</h6>
                       <h5>{lastScan || 'Never scanned'}</h5>
@@ -102,9 +102,9 @@ export default function Integrations() {
                 <div className="kpi-icon" style={{ background: '#e8eaf6', color: '#5c6bc0' }}>
                   <FiMail />
                 </div>
-                <div>
-                  <h6 className="mb-0">Outlook</h6>
-                  <small className="text-muted">Sync emails from Microsoft Outlook</small>
+                <div className='integration-box'>
+                  <h6 className="">Outlook</h6>
+                  <p className="">Sync emails from Microsoft Outlook</p>
                 </div>
               </div>
               <button className="thm-btn" disabled>Connect</button>
@@ -122,15 +122,15 @@ export default function Integrations() {
       <div className="row">
         {comingSoonIntegrations.map((integration, index) => (
           <div key={index} className="col-lg-4 col-md-6 mb-3">
-            <div className="member-card disabled-card">
+            <div className="member-card h-100 disabled-card">
               <div className="member-card-body">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="kpi-icon" style={{ background: '#f5f5f5', color: '#9e9e9e' }}>
+                <div className="d-flex align-items-start gap-3">
+                  <div className="kpi-icon" style={{ background: '#201d6a14', color: '#201d6a' }}>
                     {integration.icon}
                   </div>
-                  <div>
-                    <h6 className="mb-0">{integration.name}</h6>
-                    <small className="text-muted">{integration.description}</small>
+                  <div className='integration-box'>
+                    <h6 className="">{integration.name}</h6>
+                    <p className="mb-0">{integration.description}</p>
                   </div>
                   <span className="coming-soon-badge ms-auto">Coming Soon</span>
                 </div>

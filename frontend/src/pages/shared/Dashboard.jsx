@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FiPlus, FiAlertTriangle, FiClock, FiPackage, FiTruck, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { FiPlus, FiAlertTriangle, FiClock, FiPackage, FiTruck, FiAlertCircle, FiCheckCircle, FiDownload, FiPrinter } from 'react-icons/fi';
+import { exportToCSV, printPage } from '../../utils/exportUtils';
 import '../../styles/member.css';
 import { NavLink } from 'react-router-dom';
 
@@ -46,6 +47,18 @@ export default function Dashboard() {
     delivered: 'Delivered',
   };
 
+  const handleExport = () => {
+    const data = filteredOrders.map((o, i) => ({
+      'Sr. No.': i + 1,
+      'Customer/Supplier': o.customer,
+      'PO': o.po,
+      'Value': o.value,
+      'Due Date': o.due,
+      'Status': statusLabels[o.status],
+    }));
+    exportToCSV(data, 'dashboard_orders');
+  };
+
   return (
     <>
      <div className='row'>
@@ -55,9 +68,17 @@ export default function Dashboard() {
           <h2>Good Morning, Rahul</h2>
           <p>{today}</p>
         </div>
-        <button className="thm-btn">
-          <FiPlus  />   Add Order
-        </button>
+        <div className="d-flex gap-2">
+          {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+            <FiDownload /> Export
+          </button>
+          <button className="thm-btn outline fz-14 p-2" onClick={() => printPage('Dashboard Report')}>
+            <FiPrinter /> Print
+          </button> */}
+          <NavLink to="/app/orders/add" className="thm-btn">
+            <FiPlus /> Add Order
+          </NavLink>
+        </div>
       </div>
 
       </div>
@@ -81,12 +102,12 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="order-type-toggle">
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="member-tabs">
           {['all', 'sales', 'purchase'].map((type) => (
             <button
               key={type}
-              className={`toggle-btn ${orderType === type ? 'active' : ''}`}
+              className={`tab-btn ${orderType === type ? 'active' : ''}`}
               onClick={() => setOrderType(type)}
             >
               {type === 'all' ? 'All' : type === 'sales' ? 'Sales Orders' : 'Purchase Orders'}

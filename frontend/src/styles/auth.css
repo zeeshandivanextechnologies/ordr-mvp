@@ -88,7 +88,7 @@
   display: inline-block;
   font-size: 16px;
   font-weight: 500;
-  color: #619270;
+  color: var(--theme-text-color);
   border: none;
   outline: none;
   text-decoration: none;
@@ -137,7 +137,7 @@
 
 /* Image Side */
 .authImage {
-  background-color: #2D4735;
+  background-color: var(--primary-color);
   background-image: url('/public/login-banner.jpg');
   background-size: cover;
   background-position: center;
@@ -157,6 +157,14 @@
   height: 100%;
   align-content: center;
   text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+
+.imageOverlayText p{
+  font-size: 52px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.15;
 }
 
 
@@ -220,12 +228,13 @@
   .statsBar {
     padding: 40px 30px 20px 30px;
   }
-}
-
-@media (max-width: 768px) {
   .authImage {
     display: none;
   }
+}
+
+@media (max-width: 768px) {
+  
 
   .authFormSection {
     padding:16px;
@@ -233,7 +242,18 @@
 }
 
 
-@media (max-width: 576px) {}
+@media (max-width: 576px) {
+
+  .brandTitle{
+    font-size: 36px;
+    margin-bottom: 10px;
+  }
+
+  .heroSubtitle{
+    font-size: 22px;
+  }
+
+}
 /* Custom Checkbox */
 .custom-checkbox {
   display: flex;
