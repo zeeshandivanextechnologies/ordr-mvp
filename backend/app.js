@@ -48,14 +48,7 @@ app.get('/api/config/google', (req, res) => {
   res.json({ clientId: config.google.clientId || null });
 });
 
-if (config.nodeEnv === 'production') {
-  const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
-  app.use(express.static(frontendPath));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-}
-
+// Frontend is deployed separately, so we don't serve static files here.
 app.use(errorHandler);
 
 export default app;
