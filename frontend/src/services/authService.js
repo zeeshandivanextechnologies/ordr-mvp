@@ -21,6 +21,21 @@ const authService = {
     return res.data;
   },
 
+  updateProfile: async (data) => {
+    const res = await api.patch('/auth/profile', data);
+    return res.data;
+  },
+
+  updateAvatar: async (avatarUrl) => {
+    const res = await api.patch('/auth/avatar', { avatar_url: avatarUrl });
+    return res.data;
+  },
+
+  changePassword: async (data) => {
+    const res = await api.patch('/auth/password', data);
+    return res.data;
+  },
+
   forgotPassword: async (email) => {
     const res = await api.post('/auth/forgot-password', { email });
     return res.data;

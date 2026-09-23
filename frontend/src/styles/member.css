@@ -2376,3 +2376,25 @@
 
 
 }
+
+.password-eye-btn {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  cursor: pointer;
+  font-size: 18px;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.password-eye-btn:hover {
+  color: var(--primary-color);
+}
+
+.password-input {
+  padding-right: 44px;
+}

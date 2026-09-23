@@ -4,6 +4,9 @@ import {
   login,
   logout,
   getMe,
+  updateProfile,
+  updateAvatar,
+  changePassword,
   forgotPassword,
   verifyOtp,
   resendOtp,
@@ -19,6 +22,9 @@ router.post('/signup', asyncHandler(signup));
 router.post('/login', asyncHandler(login));
 router.post('/logout', asyncHandler(logout));
 router.get('/me', authenticate, asyncHandler(getMe));
+router.patch('/profile', authenticate, asyncHandler(updateProfile));
+router.patch('/avatar', authenticate, asyncHandler(updateAvatar));
+router.patch('/password', authenticate, asyncHandler(changePassword));
 router.post('/forgot-password', asyncHandler(forgotPassword));
 router.post('/verify-otp', asyncHandler(verifyOtp));
 router.post('/resend-otp', asyncHandler(resendOtp));

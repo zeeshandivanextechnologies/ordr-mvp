@@ -17,12 +17,12 @@ async function transferData() {
     await localClient.connect();
     await neonClient.connect();
 
-    console.log("Running migrations on Neon DB to create tables...");
-    await neonClient.query(up1);
-    await neonClient.query(up2);
-    await neonClient.query(up3);
-    await neonClient.query(up4);
-    console.log("Migrations applied on Neon DB.");
+    // console.log("Running migrations on Neon DB to create tables...");
+    // await neonClient.query(up1);
+    // await neonClient.query(up2);
+    // await neonClient.query(up3);
+    // await neonClient.query(up4);
+    // console.log("Migrations applied on Neon DB.");
 
     console.log("Fetching tables from local DB...");
     const tablesRes = await localClient.query(`

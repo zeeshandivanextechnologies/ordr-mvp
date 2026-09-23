@@ -71,6 +71,14 @@ export default function AuthProvider({ children }) {
     return result;
   };
 
+  const updateUser = (data) => {
+    setUser((prev) => {
+      const merged = { ...prev, ...data };
+      localStorage.setItem('user', JSON.stringify(merged));
+      return merged;
+    });
+  };
+
   const logout = async () => {
     try {
       await authService.logout();
@@ -86,7 +94,7 @@ export default function AuthProvider({ children }) {
   const role = user?.role || null;
 
   return (
-    <AuthContext.Provider value={{ user, role, login, signup, acceptInvite, googleLogin, logout, loading }}>
+    <AuthContext.Provider value={{ user, role, login, signup, acceptInvite, googleLogin, updateUser, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

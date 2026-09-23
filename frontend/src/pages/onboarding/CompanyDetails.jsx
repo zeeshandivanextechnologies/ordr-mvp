@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiMoreHorizontal} from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import companyService from '../../services/companyService';
+import authService from '../../services/authService';
+import { useAuth } from '../../components/AuthProvider';
 import { countries } from '../../utils/countries';
 import { timezones } from '../../utils/timezones';
 import '../../styles/onboarding.css';
@@ -13,8 +15,12 @@ export default function CompanyDetails() {
   const [industry, setIndustry] = useState('');
   const [country, setCountry] = useState('India');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [phone, setPhone] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [gstNumber, setGstNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -28,6 +34,15 @@ export default function CompanyDetails() {
         }
       } catch (err) {
         toast.error('Failed to load company details');
+      }
+      try {
+        const meRes = await authService.getMe();
+        const me = meRes.user || {};
+        setPhone(me.phone || '');
+        setDesignation(me.designation || '');
+        setGstNumber(me.gst_number || '');
+      } catch {
+        // ignore profile load errors, fields default to empty
       }
     };
     fetchCompany();
@@ -45,6 +60,13 @@ export default function CompanyDetails() {
     e.preventDefault();
     setLoading(true);
     try {
+      await authService.updateProfile({
+        full_name: user?.full_name || '',
+        email: user?.email || '',
+        phone,
+        designation,
+        gstNumber,
+      });
       await companyService.updateCompany({
         name: companyName,
         industry,
@@ -97,7 +119,10 @@ export default function CompanyDetails() {
               <p className="onboarding-desc">Tell us about your business</p>
 
               <form onSubmit={handleSubmit} className="onboarding-form">
-                <div className="custom-frm-bx">
+
+                <div className="row">
+                  <div className="col-lg-12 col-md-12 col-sm-12">
+                        <div className="custom-frm-bx">
                   <label className="">Company name</label>
                   <input
                     type="text"
@@ -108,8 +133,10 @@ export default function CompanyDetails() {
                     required
                   />
                 </div>
+                  </div>
 
-                <div className="custom-frm-bx">
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                       <div className="custom-frm-bx">
                   <label className="">Industry</label>
                   <select
                     className="form-select onboarding-control"
@@ -128,7 +155,10 @@ export default function CompanyDetails() {
                   </select>
                 </div>
 
-                <div className="custom-frm-bx">
+                  </div>
+
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                    <div className="custom-frm-bx">
                   <label className="">Country</label>
                   <select
                     className="form-select onboarding-control"
@@ -142,7 +172,10 @@ export default function CompanyDetails() {
                   </select>
                 </div>
 
-                <div className="custom-frm-bx">
+                  </div>
+
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                    <div className="custom-frm-bx">
                   <label className="">Timezone</label>
                   <select
                     className="form-select onboarding-control"
@@ -154,6 +187,47 @@ export default function CompanyDetails() {
                       <option key={tz.value} value={tz.value}>{tz.label}</option>
                     ))}
                   </select>
+                </div>
+                  </div>
+
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                    <div className="custom-frm-bx">
+                      <label className="">Phone</label>
+                      <input
+                        type="tel"
+                        className="form-control onboarding-control"
+                        placeholder="e.g. +91 98765 43210"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                    <div className="custom-frm-bx">
+                      <label className="">Designation</label>
+                      <input
+                        type="text"
+                        className="form-control onboarding-control"
+                        placeholder="e.g. Purchase Manager"
+                        value={designation}
+                        onChange={(e) => setDesignation(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="col-lg-6 col-md-6 col-sm-12">
+                    <div className="custom-frm-bx">
+                      <label className="">GST Number</label>
+                      <input
+                        type="text"
+                        className="form-control onboarding-control"
+                        placeholder="e.g. 27AABCU9603R1ZM"
+                        value={gstNumber}
+                        onChange={(e) => setGstNumber(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className='mt-3'>

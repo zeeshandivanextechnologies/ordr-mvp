@@ -139,7 +139,7 @@ export const getMe = async (req, res) => {
   try {
     const result = await query(
       `SELECT u.id, u.company_id, u.full_name, u.email,
-              u.role, u.avatar_url, u.created_at,
+              u.role, u.avatar_url, u.phone, u.designation, u.gst_number, u.created_at,
               c.name as company_name, c.industry, c.country, c.timezone
        FROM users u
        LEFT JOIN companies c ON u.company_id = c.id
@@ -152,6 +152,149 @@ export const getMe = async (req, res) => {
     }
 
     res.json({ user: result.rows[0] });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const { full_name, email, phone, designation, gst_number } = req.body;
+
+    if (!full_name || !full_name.trim()) {
+      return res.status(400).json({ error: 'Full name is required' });
+    }
+
+    if (email && email === req.user.email) {
+      // unchanged email - nothing to validate
+    } else if (email && email.trim()) {
+      const existing = await query(
+        'SELECT id FROM users WHERE email = $1 AND id <> $2',
+        [email.toLowerCase(), req.user.id]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'Email already registered' });
+      }
+    }
+
+    const result = await query(
+      `UPDATE users SET
+         full_name = $1,
+         email = $2,
+         phone = $3,
+         designation = $4,
+         gst_number = $5,
+         updated_at = NOW()
+       WHERE id = $6
+       RETURNING id, company_id, full_name, email, role, avatar_url, phone, designation, gst_number`,
+      [
+        full_name.trim(),
+        email ? email.trim().toLowerCase() : req.user.email,
+        phone || null,
+        designation || null,
+        gst_number || null,
+        req.user.id,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: result.rows[0],
+    });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateAvatar = async (req, res) => {
+  try {
+    const { avatar_url } = req.body;
+
+    if (avatar_url === undefined) {
+      return res.status(400).json({ error: 'avatar_url is required' });
+    }
+
+    if (avatar_url !== null && avatar_url !== '') {
+      if (typeof avatar_url !== 'string') {
+        return res.status(400).json({ error: 'avatar_url must be a string or null' });
+      }
+
+      const match = avatar_url.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,/);
+      if (!match) {
+        return res.status(400).json({ error: 'Invalid image format' });
+      }
+
+      const base64Length = avatar_url.length - avatar_url.indexOf(',') - 1;
+      const approxBytes = base64Length * 0.75;
+      if (approxBytes > 3 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Image too large (max 3MB)' });
+      }
+    }
+
+    const result = await query(
+      `UPDATE users SET
+         avatar_url = $1,
+         updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, company_id, full_name, email, role, avatar_url, phone, designation, gst_number`,
+      [avatar_url || null, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      message: 'Avatar updated successfully',
+      user: result.rows[0],
+    });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    if (new_password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const result = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password_hash) {
+      return res.status(400).json({ error: 'Password change not available for Google accounts' });
+    }
+
+    const isMatch = await bcrypt.compare(current_password, user.password_hash);
+
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    const password_hash = await bcrypt.hash(new_password, 12);
+
+    await query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [password_hash, req.user.id]
+    );
+
+    res.json({ message: 'Password updated successfully' });
   } catch (error) {
     throw error;
   }

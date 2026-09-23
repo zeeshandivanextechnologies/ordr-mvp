@@ -87,14 +87,14 @@ function teamInviteTemplate(inviterName, companyName, role, inviteLink) {
   <div style="max-width:500px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
   <div style="background:linear-gradient(135deg,#201d6a,#3d35a0);padding:15px 30px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:28px;letter-spacing:2px;">ORDR</h1></div>
   <div style="padding:15px 30px;text-align:center;">
-    <h2 style="color:#000; font-size : 24px; margin : 5px 0">You've been invited!</h2>
-    <p style="color:#666; font-size: 16px; margin-top : 10px margin-bottom : 0px"><b>${inviterName}</b> has invited you to join <b>${companyName}</b> as a ${role === 'admin' ? 'an' : 'a'} <b>${role}</b>.</p>
+    <h2 style="color:#000; font-size : 24px; margin : 10px 0">You've been invited!</h2>
+    <p style="color:#000; font-size: 16px; font-weight : 500; margin-top : 10px margin-bottom : 0px"><b>${inviterName}</b> has invited you to join <b>${companyName}</b> as a ${role === 'admin' ? 'an' : 'a'} <b>${role}</b>.</p>
     <div style="margin: 15px 0;">
       <a href="${inviteLink}" style="background:#201d6a;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;display:inline-block;">Accept Invitation</a>
     </div>
-    <p style="color:#999;font-size:14px;">If you did not expect this, please ignore this email.</p>
+    <p style=" margin : 0px; padding : 10px 0px; font-size:16px; font-weight : 400;">If you did not expect this, please ignore this email.</p>
   </div>
-  <div style="padding:15px 30px;background:#f8f9fa;text-align:center;font-size:12px;color:#999;"><p>&copy; ${new Date().getFullYear()} ORDR. All rights reserved.</p></div>
+  <div style="padding:15px 30px;background:#f8f9fa;text-align:center;font-size:12px;color:#999;"><p style="margin : 0px; font-size : 16px; color : #000; font-weight : 600;">&copy; ${new Date().getFullYear()} ORDR. All rights reserved.</p></div>
   </div>
   </body>
   </html>`;

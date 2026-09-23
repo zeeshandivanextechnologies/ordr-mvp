@@ -45,6 +45,8 @@ import integrationRoutes from './routes/integration.js';
 app.use('/api/integration', integrationRoutes);
 import teamRoutes from './routes/team.js';
 app.use('/api/team', teamRoutes);
+import notificationRoutes from './routes/notifications.js';
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

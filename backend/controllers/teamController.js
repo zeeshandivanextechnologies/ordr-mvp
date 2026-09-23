@@ -217,3 +217,126 @@ export const inviteTeamMembers = async (req, res) => {
     res.status(500).json({ error: 'Failed to process invitations' });
   }
 };
+
+export const listTeamMembers = async (req, res) => {
+  try {
+    const { company_id } = req.user;
+
+    const membersResult = await query(
+      `SELECT id, full_name, email, role, is_active, created_at
+       FROM users
+       WHERE company_id = $1
+       ORDER BY created_at ASC`,
+      [company_id]
+    );
+
+    const invitesResult = await query(
+      `SELECT id, email, role, status, expires_at, created_at
+       FROM team_invitations
+       WHERE company_id = $1 AND status = 'pending'
+       ORDER BY created_at DESC`,
+      [company_id]
+    );
+
+    res.json({
+      members: membersResult.rows,
+      invitations: invitesResult.rows,
+    });
+  } catch (error) {
+    console.error('List Team Error:', error);
+    res.status(500).json({ error: 'Failed to load team members' });
+  }
+};
+
+export const removeTeamMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { company_id, id: currentUserId } = req.user;
+
+    if (id === currentUserId) {
+      return res.status(400).json({ error: 'You cannot remove yourself' });
+    }
+
+    const result = await query(
+      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2',
+      [id, company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    if (result.rows[0].role === 'admin') {
+      return res.status(400).json({ error: 'Cannot remove an admin member' });
+    }
+
+    await query('DELETE FROM users WHERE id = $1', [id]);
+
+    res.json({ message: 'Member removed successfully' });
+  } catch (error) {
+    console.error('Remove Team Member Error:', error);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+};
+
+export const revokeInvitation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { company_id } = req.user;
+
+    const result = await query(
+      `UPDATE team_invitations
+       SET status = 'expired', updated_at = NOW()
+       WHERE id = $1 AND company_id = $2 AND status = 'pending'`,
+      [id, company_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Invitation not found' });
+    }
+
+    res.json({ message: 'Invitation revoked' });
+  } catch (error) {
+    console.error('Revoke Invitation Error:', error);
+    res.status(500).json({ error: 'Failed to revoke invitation' });
+  }
+};
+
+export const updateMemberStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+    const { company_id, id: currentUserId } = req.user;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'is_active must be a boolean' });
+    }
+
+    if (id === currentUserId) {
+      return res.status(400).json({ error: 'You cannot change your own status' });
+    }
+
+    const result = await query(
+      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2',
+      [id, company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    if (result.rows[0].role === 'admin') {
+      return res.status(400).json({ error: 'Cannot change status of an admin member' });
+    }
+
+    await query(
+      'UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2',
+      [is_active, id]
+    );
+
+    res.json({ message: is_active ? 'Member activated' : 'Member deactivated' });
+  } catch (error) {
+    console.error('Update Member Status Error:', error);
+    res.status(500).json({ error: 'Failed to update member status' });
+  }
+};

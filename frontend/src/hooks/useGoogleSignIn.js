@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import { useAuth } from '../components/AuthProvider';
@@ -7,7 +7,7 @@ let gsiPromise = null;
 let cachedClientId = null;
 
 function loadGsiScript() {
-  if (window.google?.accounts?.id) return Promise.resolve();
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
   if (gsiPromise) return gsiPromise;
 
   gsiPromise = new Promise((resolve, reject) => {
@@ -16,7 +16,7 @@ function loadGsiScript() {
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      if (window.google?.accounts?.id) {
+      if (window.google?.accounts?.oauth2) {
         resolve();
       } else {
         reject(new Error('Google Identity Services failed to load'));
@@ -37,60 +37,55 @@ async function fetchGoogleClientId() {
   return cachedClientId;
 }
 
-function decodeCredential(credential) {
-  try {
-    const payload = credential.split('.')[1];
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = decodeURIComponent(
-      atob(normalized)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    const data = JSON.parse(json);
-    return {
-      googleId: data.sub,
-      email: data.email,
-      fullName: data.name,
-      avatarUrl: data.picture || null,
-    };
-  } catch {
-    throw new Error('Could not read Google profile');
-  }
-}
-
 export default function useGoogleSignIn(onSuccess) {
   const { googleLogin } = useAuth();
   const [loading, setLoading] = useState(false);
+  const clientRef = useRef(null);
+  const initPromiseRef = useRef(null);
   const resetTimerRef = useRef(null);
+  const googleLoginRef = useRef(googleLogin);
+  const onSuccessRef = useRef(onSuccess);
+
+  useEffect(() => {
+    googleLoginRef.current = googleLogin;
+  }, [googleLogin]);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   const finish = () => {
     clearTimeout(resetTimerRef.current);
     setLoading(false);
   };
 
-  const handleGoogleSignIn = async () => {
-    if (loading) return;
-    setLoading(true);
-    resetTimerRef.current = setTimeout(finish, 30000);
+  const ensureClient = () => {
+    if (clientRef.current) return Promise.resolve(clientRef.current);
+    if (initPromiseRef.current) return initPromiseRef.current;
 
-    try {
+    initPromiseRef.current = (async () => {
       await loadGsiScript();
       const clientId = await fetchGoogleClientId();
 
-      const client = window.google.accounts.oauth2.initTokenClient({
+      if (!window.google?.accounts?.oauth2) {
+        throw new Error('Google sign-in failed to initialize');
+      }
+
+      clientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: 'email profile',
         callback: async (tokenResponse) => {
-          if (tokenResponse.error) {
+          if (tokenResponse?.error) {
             toast.error('Google sign-in cancelled or failed.');
             finish();
             return;
           }
+
           try {
             const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
               headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
             });
+            if (!userInfoRes.ok) throw new Error('Could not read Google profile');
             const userInfo = await userInfoRes.json();
 
             const payload = {
@@ -100,15 +95,38 @@ export default function useGoogleSignIn(onSuccess) {
               avatarUrl: userInfo.picture || null,
             };
 
-            const result = await googleLogin(payload);
-            onSuccess?.(result);
+            const result = await googleLoginRef.current(payload);
+            onSuccessRef.current?.(result);
           } catch (err) {
-            toast.error(err.response?.data?.error || 'Google sign-in failed. Please try again.');
+            toast.error(err.response?.data?.error || err.message || 'Google sign-in failed. Please try again.');
           } finally {
             finish();
           }
         },
       });
+
+      return clientRef.current;
+    })();
+
+    initPromiseRef.current.catch(() => {
+      initPromiseRef.current = null;
+    });
+
+    return initPromiseRef.current;
+  };
+
+  useEffect(() => {
+    ensureClient().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    if (loading) return;
+    setLoading(true);
+    resetTimerRef.current = setTimeout(finish, 30000);
+
+    try {
+      const client = await ensureClient();
       client.requestAccessToken();
     } catch (err) {
       toast.error(err.message || 'Google sign-in is currently unavailable.');
