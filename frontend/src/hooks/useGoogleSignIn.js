@@ -78,25 +78,38 @@ export default function useGoogleSignIn(onSuccess) {
       await loadGsiScript();
       const clientId = await fetchGoogleClientId();
 
-      const onCredential = async (response) => {
-        try {
-          const payload = decodeCredential(response.credential);
-          const result = await googleLogin(payload);
-          onSuccess?.(result);
-        } catch (err) {
-          toast.error(err.response?.data?.error || 'Google sign-in failed. Please try again.');
-        } finally {
-          finish();
-        }
-      };
-
-      window.google.accounts.id.initialize({
+      const client = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        callback: onCredential,
-        auto_select: false,
-        ux_mode: 'popup',
+        scope: 'email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse.error) {
+            toast.error('Google sign-in cancelled or failed.');
+            finish();
+            return;
+          }
+          try {
+            const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+            });
+            const userInfo = await userInfoRes.json();
+
+            const payload = {
+              googleId: userInfo.sub,
+              email: userInfo.email,
+              fullName: userInfo.name,
+              avatarUrl: userInfo.picture || null,
+            };
+
+            const result = await googleLogin(payload);
+            onSuccess?.(result);
+          } catch (err) {
+            toast.error(err.response?.data?.error || 'Google sign-in failed. Please try again.');
+          } finally {
+            finish();
+          }
+        },
       });
-      window.google.accounts.id.prompt();
+      client.requestAccessToken();
     } catch (err) {
       toast.error(err.message || 'Google sign-in is currently unavailable.');
       finish();
