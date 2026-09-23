@@ -6,7 +6,7 @@ export default function AddShipment() {
     <div>
       <div className="member-page-header">
         <div className="d-flex align-items-center gap-3">
-          <button className="back-btn"><FiArrowLeft /> Back </button>
+          <button className="back-btn"><FiArrowLeft /><span className='back-mobile-hide'> Back</span> </button>
           <h2 className="mb-0">Add Shipment</h2>
         </div>
       </div>

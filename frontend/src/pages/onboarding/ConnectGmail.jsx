@@ -1,10 +1,58 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FiMoreHorizontal, FiMail } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
+import { toast } from 'react-toastify';
+import integrationService from '../../services/integrationService';
 import '../../styles/onboarding.css';
 
 export default function ConnectGmail() {
+  const [selectedProvider, setSelectedProvider] = useState('gmail');
+  const [isConnected, setIsConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [connectLoading, setConnectLoading] = useState(false);
+  
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check URL parameters for OAuth redirect status
+    const params = new URLSearchParams(location.search);
+    if (params.get('success')) {
+      toast.success('Gmail connected successfully!');
+      // Clean up URL
+      navigate('/onboarding/gmail', { replace: true });
+    } else if (params.get('error')) {
+      toast.error(params.get('error') || 'Failed to connect Gmail');
+      navigate('/onboarding/gmail', { replace: true });
+    }
+
+    const checkStatus = async () => {
+      try {
+        const res = await integrationService.getGmailStatus();
+        setIsConnected(res.connected);
+      } catch (err) {
+        console.error('Failed to fetch status');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkStatus();
+  }, [location, navigate]);
+
+  const handleConnect = async () => {
+    setConnectLoading(true);
+    try {
+      const res = await integrationService.getGmailConnectUrl();
+      if (res.url) {
+        window.location.href = res.url;
+      }
+    } catch (err) {
+      toast.error('Failed to start connection process');
+      setConnectLoading(false);
+    }
+  };
   const steps = [
     { num: 1, label: 'Company Details', completed: true },
     { num: 2, label: 'What to Track', completed: true },
@@ -46,16 +94,40 @@ export default function ConnectGmail() {
               <p className="onboarding-desc">We'll scan your emails to find orders, confirmations and delivery updates.</p>
 
               <div className="email-providers">
-                <div className="provider-card recommended">
+                <div 
+                  className={`provider-card recommended ${selectedProvider === 'gmail' ? 'selected' : ''} ${isConnected ? 'connected-card' : ''}`}
+                  onClick={() => setSelectedProvider('gmail')}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="provider-logo">
                     <FcGoogle size={40} />
                   </div>
                   <h5>Gmail</h5>
-                  <span className="provider-badge recommended-badge">Recommended</span>
-                  <button className="thm-btn w-100">Connect Gmail</button>
+                  {isConnected ? (
+                    <span className="provider-badge connected-badge">Connected</span>
+                  ) : (
+                    <span className="provider-badge recommended-badge">Recommended</span>
+                  )}
+                  
+                  {isConnected ? (
+                    <button className="thm-btn w-100" style={{ backgroundColor: '#28a745', border: 'none' }} disabled>
+                      Connected ✓
+                    </button>
+                  ) : (
+                    <button 
+                      className="thm-btn w-100" 
+                      onClick={(e) => { e.stopPropagation(); handleConnect(); }}
+                      disabled={loading || connectLoading}
+                    >
+                      {connectLoading ? 'Connecting...' : 'Connect Gmail'}
+                    </button>
+                  )}
                 </div>
 
-                <div className="provider-card coming-soon">
+                <div 
+                  className={`provider-card coming-soon ${selectedProvider === 'outlook' ? 'selected' : ''}`}
+                  style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                >
                   <div className="provider-logo">
                     <FiMail size={40} color="#0078D4" />
                   </div>
@@ -63,7 +135,8 @@ export default function ConnectGmail() {
                   <span className="provider-badge coming-soon-badge">Coming soon</span>
                   <button className="provider-btn outline" disabled>Notify me</button>
                 </div>
-              </div>
+
+              </div> 
 
               <div className="provider-features">
                 <div className="feature-check"><span className="check-icon">✓</span> Secure & read-only</div>
@@ -72,7 +145,11 @@ export default function ConnectGmail() {
 
               <div className="onboarding-nav">
                 <Link to="/onboarding/track" className="nav-back">Back</Link>
-                <Link to="/onboarding/team" className="nav-skip">Skip for now</Link>
+                {isConnected ? (
+                  <Link to="/onboarding/team" className="thm-btn">Next</Link>
+                ) : (
+                  <Link to="/onboarding/team" className="nav-skip">Skip for now</Link>
+                )}
               </div>
             </div>
           </div>

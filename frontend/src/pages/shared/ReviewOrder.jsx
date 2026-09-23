@@ -8,7 +8,7 @@ export default function ReviewOrder() {
         <div className="col-lg-12">
           <div className="member-page-header">
             <div className="d-flex align-items-center gap-3">
-              <button className="back-btn"><FiArrowLeft /> Back</button>
+              <button className="back-btn"><FiArrowLeft /> <span className='back-mobile-hide'> Back</span> </button>
               <div>
                 <h2 className="mb-1">Review Order</h2>
                 <p className="mb-0">Verify and confirm AI-extracted order data</p>
@@ -149,7 +149,7 @@ export default function ReviewOrder() {
 
       <div className="row">
         <div className="col-lg-12">
-          <div className="d-flex justify-content-end gap-3">
+          <div className="review-box">
             <button className="thm-btn outline fz-14"><FiX /> Ignore</button>
             <button className="thm-btn outline fz-14"><FiEdit2 /> Edit</button>
             <button className="thm-btn fz-14"><FiCheck /> Confirm Order</button>

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import authService from '../../services/authService';
 import '../../styles/auth.css';
 
 export default function ResetPassword() {
@@ -9,9 +11,23 @@ export default function ResetPassword() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const email = location.state?.email;
+  const otp = location.state?.otp;
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (!email || !otp) {
+      navigate('/forgot-password');
+    }
+  }, [email, otp, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setPasswordError('');
+
     if (password !== confirmPassword) {
       setPasswordError('Passwords do not match');
       return;
@@ -20,9 +36,20 @@ export default function ResetPassword() {
       setPasswordError('Password must be at least 8 characters');
       return;
     }
-    setPasswordError('');
-    console.log('Reset Password:', { password });
+
+    setLoading(true);
+    try {
+      await authService.resetPassword(email, otp, password);
+      toast.success('Password reset successful!');
+      setTimeout(() => navigate('/login'), 2000);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (!email || !otp) return null;
 
   return (
     <div className="authWrapper">
@@ -54,9 +81,10 @@ export default function ResetPassword() {
                     <button 
                       type="button" 
                       className="inputIconRight border-0 bg-transparent p-0 d-flex align-items-center"
+                      style={{ zIndex: 100 }}
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? <FiEyeOff /> : <FiEye />}
+                      {showPassword ? <FiEyeOff size={18} color="#666" /> : <FiEye size={18} color="#666" />}
                     </button>
                   </div>
                 </div>
@@ -79,9 +107,10 @@ export default function ResetPassword() {
                     <button 
                       type="button" 
                       className="inputIconRight border-0 bg-transparent p-0 d-flex align-items-center"
+                      style={{ zIndex: 100 }}
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     >
-                      {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                      {showConfirmPassword ? <FiEyeOff size={18} color="#666" /> : <FiEye size={18} color="#666" />}
                     </button>
                   </div>
                   {passwordError && (
@@ -90,7 +119,9 @@ export default function ResetPassword() {
                 </div>
                 
                 <div className='mt-3'>
-                  <button type="submit" className="thm-lg-btn w-100 text-center">Save Password</button>
+                  <button type="submit" className="thm-lg-btn w-100 text-center" disabled={loading}>
+                    {loading ? 'Saving...' : 'Save Password'}
+                  </button>
                 </div>
                 
                 <div className="text-center mt-3">

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { FiMenu, FiBell, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiChevronUp, FiBox, FiTruck, FiMail, FiClock, FiAlertCircle, FiPackage } from 'react-icons/fi';
 import { IoIosNotifications } from 'react-icons/io';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthProvider';
 
 export default function Header({ toggleSidebar }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -11,6 +12,14 @@ export default function Header({ toggleSidebar }) {
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
   const notifRef = useRef(null);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Helper to get initials
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
 
   const notifications = [
     { id: 1, icon: <FiMail />, title: 'New order detected from ABC Industries', time: '5 min ago', unread: true, color: '#1565c0' },
@@ -172,11 +181,15 @@ export default function Header({ toggleSidebar }) {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           >
             <div className="user-avatar">
-              RS
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                getInitials(user?.full_name)
+              )}
             </div>
             <div className="user-info ">
-              <h6 className="user-name">Rahul</h6>
-              <p className="user-role">Member</p>
+              <h6 className="user-name">{user?.full_name?.split(' ')[0] || 'User'}</h6>
+              <p className="user-role text-capitalize">{user?.role || 'Member'}</p>
             </div>
             {isDropdownOpen ? (
               <FiChevronUp className="text-black " />
@@ -194,9 +207,15 @@ export default function Header({ toggleSidebar }) {
                 <FiSettings /> Settings
               </Link>
               <hr className="dropdown-divider" />
-              <Link to="/login" className="order-dropdown-item text-danger">
+              <button 
+                onClick={async () => {
+                  await logout();
+                  navigate('/login');
+                }}
+                className="order-dropdown-item text-danger border-0 bg-transparent w-100 text-start"
+              >
                 <FiLogOut /> Logout
-              </Link>
+              </button>
             </div>
           )}
         </div>

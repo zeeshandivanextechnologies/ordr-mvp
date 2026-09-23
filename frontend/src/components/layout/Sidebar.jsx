@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings } from 'react-icons/fi';
-import { useAuth } from '../../Router';
+import { useAuth } from '../AuthProvider';
 import '../../styles/member.css';
 import { MdLogout } from 'react-icons/md';
 
 export default function Sidebar({ isOpen, toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navLinks = [
@@ -31,8 +31,9 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     setShowLogoutModal(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false);
+    await logout();
     navigate('/login');
   };
 

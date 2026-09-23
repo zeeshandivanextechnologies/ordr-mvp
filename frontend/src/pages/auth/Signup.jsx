@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FiMail, FiLock, FiEye, FiEyeOff, FiUser } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
+import { toast } from 'react-toastify';
+import { useAuth } from '../../components/AuthProvider';
+import useGoogleSignIn from '../../hooks/useGoogleSignIn';
 import '../../styles/auth.css';
 
 export default function Signup() {
@@ -10,10 +13,34 @@ export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { signup } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleGoogleSuccess = (result) => {
+    if (result?.isNew) {
+      toast.success('Account created successfully!');
+      navigate('/onboarding/company');
+    } else {
+      toast.success('Login successful!');
+      navigate('/app/dashboard');
+    }
+  };
+
+  const { handleGoogleSignIn, loading: googleLoading } = useGoogleSignIn(handleGoogleSuccess);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Signup:', { fullName, email, password, agreedToTerms });
+    setLoading(true);
+    try {
+      await signup(fullName, email, password);
+      toast.success('Account created successfully!');
+      navigate('/onboarding/company');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Signup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -92,13 +119,15 @@ export default function Signup() {
                 </div>
 
               <div className='mb-2'>
-                  <button type="submit" className="thm-lg-btn w-100 text-center">Sign Up</button>
+                  <button type="submit" className="thm-lg-btn w-100 text-center" disabled={loading}>
+                    {loading ? 'Creating Account...' : 'Sign Up'}
+                  </button>
               </div> 
                 
                 <div className="divider">or</div>
                 
-                <button type="button" className="googleBtn">
-                  <FcGoogle size={20} /> Continue with Google
+                <button type="button" className="googleBtn" onClick={handleGoogleSignIn} disabled={loading || googleLoading}>
+                  <FcGoogle size={20} /> {googleLoading ? 'Connecting...' : 'Continue with Google'}
                 </button>
               </form>
               

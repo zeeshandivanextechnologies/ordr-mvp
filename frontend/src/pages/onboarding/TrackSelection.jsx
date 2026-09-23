@@ -1,10 +1,28 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { FiMoreHorizontal, FiShoppingCart, FiPackage } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import companyService from '../../services/companyService';
 import '../../styles/onboarding.css';
 
 export default function TrackSelection() {
   const [selected, setSelected] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const res = await companyService.getCompany();
+        if (res.company && res.company.tracking_preferences) {
+          setSelected(res.company.tracking_preferences);
+        }
+      } catch (err) {
+        toast.error('Failed to load tracking preferences');
+      }
+    };
+    fetchCompany();
+  }, []);
 
   const steps = [
     { num: 1, label: 'Company Details', completed: true },
@@ -19,6 +37,22 @@ export default function TrackSelection() {
       setSelected(selected.filter(item => item !== option));
     } else {
       setSelected([...selected, option]);
+    }
+  };
+
+  const handleNext = async (e) => {
+    e.preventDefault();
+    if (selected.length === 0) return;
+    
+    setLoading(true);
+    try {
+      await companyService.updateCompany({ tracking_preferences: selected });
+      toast.success('Tracking preferences saved');
+      navigate('/onboarding/gmail');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save tracking preferences');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,13 +109,13 @@ export default function TrackSelection() {
               </div>
 
               <div className="mt-3">
-                <Link
-                  to="/onboarding/gmail"
-                  className={`thm-lg-btn d-block text-center ${selected.length === 0 ? 'disabled' : ''}`}
-                  onClick={(e) => selected.length === 0 && e.preventDefault()}
+                <button
+                  onClick={handleNext}
+                  className="thm-lg-btn w-100 text-center"
+                  disabled={selected.length === 0 || loading}
                 >
-                  Next
-                </Link>
+                  {loading ? 'Saving...' : 'Next'}
+                </button>
               </div>
 
               <div className="onboarding-nav">

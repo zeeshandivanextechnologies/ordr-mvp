@@ -1310,6 +1310,7 @@
 /* Order Detail */
 
 
+
 .order-value {
   font-size: 20px;
   font-weight: 700;
@@ -1341,6 +1342,13 @@
   display: flex;
   align-items: center ;
   gap: 16px;
+}
+
+.review-box{
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
 }
 
 /* Document Item */
@@ -1478,6 +1486,10 @@
 
   .order-type-toggle {
     overflow-x: scroll;
+  }
+
+  .back-mobile-hide{
+    display: none;
   }
 
 }
@@ -2285,6 +2297,15 @@
   .connected-details{
     width: 100%;
   }
+
+  .review-box{
+    flex-direction: column;
+  }
+
+    .review-box .thm-btn{
+      width: 100%;
+    }
+
 }
 
 

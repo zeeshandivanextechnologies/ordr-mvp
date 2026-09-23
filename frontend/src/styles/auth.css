@@ -69,6 +69,7 @@
   color: #666;
   cursor: pointer;
   font-size: 18px;
+  z-index: 10;
 }
 
 .inputIconRight:hover {
@@ -197,6 +198,7 @@
 
 .auth-input-with-icon {
   padding-left: 45px !important;
+  padding-right: 45px !important;
   height: 52px !important;
 }
 

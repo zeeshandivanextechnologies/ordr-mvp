@@ -1,9 +1,26 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMoreHorizontal, FiCheckCircle } from 'react-icons/fi';
+import authService from '../../services/authService';
 import '../../styles/onboarding.css';
 
 export default function GoToDashboard() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await authService.getMe();
+        if (res && res.user) {
+          setUser(res.user);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user', err);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const steps = [
     { num: 1, label: 'Company Details', completed: true },
     { num: 2, label: 'What to Track', completed: true },
@@ -45,8 +62,12 @@ export default function GoToDashboard() {
                 <div className="all-set-icon">
                   <FiCheckCircle size={48} />
                 </div>
-                <h1 className="onboarding-heading">All set!</h1>
-                <p className="onboarding-desc">You're ready to start tracking your orders. Your workspace is set up and ready to go.</p>
+                <h1 className="onboarding-heading">
+                  {user ? `All set, ${user.full_name.split(' ')[0]}!` : 'All set!'}
+                </h1>
+                <p className="onboarding-desc">
+                  You're ready to start tracking your orders. Your workspace {user && user.company_name ? `for ${user.company_name} ` : ''}is set up and ready to go.
+                </p>
                 <Link to="/" className="thm-lg-btn d-inline-block">Go to Dashboard</Link>
               </div>
             </div>

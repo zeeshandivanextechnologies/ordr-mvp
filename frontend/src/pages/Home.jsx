@@ -4,6 +4,7 @@ import { FiMail, FiCpu, FiTruck, FiCheckCircle, FiChevronDown, FiUpload, FiEdit3
 import Splide from '@splidejs/splide';
 import '@splidejs/splide/css';
 import useCounter from '../hooks/useCounter';
+import { useAuth } from '../components/AuthProvider';
 import '../styles/landing.css';
 
 function StatCounter({ end, suffix = '', duration = 2000 }) {
@@ -12,6 +13,7 @@ function StatCounter({ end, suffix = '', duration = 2000 }) {
 }
 
 export default function Home() {
+  const { user, loading } = useAuth();
   const splideRef = useRef(null);
 
   useEffect(() => {
@@ -169,8 +171,14 @@ export default function Home() {
             <a href="#faq" className="nav-link-custom">FAQ</a>
           </div>
           <div className="d-flex gap-3">
-            <Link to="/login" className="thm-btn outline  ">Login</Link>
-            <Link to="/signup" className="thm-btn ">Get Started</Link>
+            {loading ? null : user ? (
+              <Link to="/app/dashboard" className="thm-btn">Dashboard</Link>
+            ) : (
+              <>
+                <Link to="/login" className="thm-btn outline  ">Login</Link>
+                <Link to="/signup" className="thm-btn ">Get Started</Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

@@ -13,7 +13,7 @@ export default function OrderDetail() {
         <div className="col-lg-12">
           <div className="member-page-header">
             <div className="d-flex align-items-center gap-3">
-              <button className="back-btn"><FiArrowLeft /> Back</button>
+              <button className="back-btn"><FiArrowLeft /> <span className='back-mobile-hide'> Back</span> </button>
               <div>
                 <h2 className="mb-1">ABC Industries</h2>
                 <p className="mb-0">PO-8192</p>

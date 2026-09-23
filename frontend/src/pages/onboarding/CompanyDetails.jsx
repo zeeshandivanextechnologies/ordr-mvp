@@ -1,14 +1,37 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { FiMoreHorizontal} from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import companyService from '../../services/companyService';
+import { countries } from '../../utils/countries';
+import { timezones } from '../../utils/timezones';
 import '../../styles/onboarding.css';
 import { HiOfficeBuilding } from 'react-icons/hi';
 
 export default function CompanyDetails() {
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
-  const [country, setCountry] = useState('india');
-  const [timezone, setTimezone] = useState('IST');
+  const [country, setCountry] = useState('India');
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const res = await companyService.getCompany();
+        if (res.company) {
+          setCompanyName(res.company.name || '');
+          setIndustry(res.company.industry || '');
+          setCountry(res.company.country || 'India');
+          setTimezone(res.company.timezone || 'Asia/Kolkata');
+        }
+      } catch (err) {
+        toast.error('Failed to load company details');
+      }
+    };
+    fetchCompany();
+  }, []);
 
   const steps = [
     { num: 1, label: 'Company Details', active: true },
@@ -18,9 +41,23 @@ export default function CompanyDetails() {
     { num: 5, label: 'All Set!', active: false },
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    window.location.href = '/onboarding/track';
+    setLoading(true);
+    try {
+      await companyService.updateCompany({
+        name: companyName,
+        industry,
+        country,
+        timezone
+      });
+      toast.success('Company details saved');
+      navigate('/onboarding/track');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save company details');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -98,10 +135,10 @@ export default function CompanyDetails() {
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                   >
-                    <option value="india">India</option>
-                    <option value="uae">UAE</option>
-                    <option value="usa">USA</option>
-                    <option value="uk">UK</option>
+                    <option value="">Select country</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -112,21 +149,17 @@ export default function CompanyDetails() {
                     value={timezone}
                     onChange={(e) => setTimezone(e.target.value)}
                   >
-                    <option value="IST">IST (UTC +5:30) — India</option>
-                    <option value="GST">GST (UTC +4:00) — UAE</option>
-                    <option value="EST">EST (UTC -5:00) — USA (Eastern)</option>
-                    <option value="CST">CST (UTC -6:00) — USA (Central)</option>
-                    <option value="PST">PST (UTC -8:00) — USA (Pacific)</option>
-                    <option value="GMT">GMT (UTC +0:00) — UK</option>
-                    <option value="CET">CET (UTC +1:00) — Europe</option>
-                    <option value="JST">JST (UTC +9:00) — Japan</option>
-                    <option value="AEST">AEST (UTC +10:00) — Australia</option>
-                    <option value="SGT">SGT (UTC +8:00) — Singapore</option>
+                    <option value="">Select timezone</option>
+                    {timezones.map((tz) => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div className='mt-3'>
-                  <button type="submit" className="thm-lg-btn w-100">Next</button>
+                  <button type="submit" className="thm-lg-btn w-100" disabled={loading}>
+                    {loading ? 'Saving...' : 'Next'}
+                  </button>
                 </div>
               </form>
             </div>
