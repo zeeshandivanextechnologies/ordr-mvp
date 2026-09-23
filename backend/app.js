@@ -17,8 +17,14 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: config.nodeEnv === 'production' ? false : true,
 }));
+const allowedOrigins = [
+  config.frontendUrl.replace(/\/$/, ''),
+  config.frontendUrl.replace(/\/$/, '') + '/',
+  'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: config.frontendUrl,
+  origin: allowedOrigins,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
