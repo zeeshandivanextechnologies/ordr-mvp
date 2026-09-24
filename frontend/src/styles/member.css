@@ -297,6 +297,7 @@
   border-bottom: 1px solid #f0f0f0;
   vertical-align: middle;
   white-space: nowrap;
+  text-transform: capitalize;
 }
 
 .member-table tbody tr:hover {
@@ -1322,6 +1323,7 @@
   font-weight: 400;
   margin-bottom: 8px;
   color: var(--text-secondary);
+  word-break: break-all;
 
 }
 
@@ -2289,13 +2291,14 @@
 
 @media (max-width: 576px) {
   .connected-box{
-    flex-wrap: wrap-reverse;
     gap: 5px;
     justify-content: end;
+    align-items: start;
   }
 
   .connected-details{
     width: 100%;
+    align-items: start;
   }
 
   .review-box{

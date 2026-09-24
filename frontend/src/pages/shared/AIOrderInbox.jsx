@@ -1,42 +1,42 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiSearch, FiEye, FiChevronDown, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import api from '../../services/api';
+import { toast } from 'react-toastify';
 import '../../styles/member.css';
 
-const allOrders = {
-  New: [
-    { id: 1, customer: 'ABC Industries', type: 'Purchase', poNumber: 'PO-2024-0891', items: 'Mild Steel Sheets, Bolts', value: '₹1,85,000', emailDate: '15 Sep 2026', confidence: 95 },
-    { id: 2, customer: 'XYZ Chemicals', type: 'Sales', poNumber: 'SO-2024-0342', items: 'Industrial Solvents', value: '₹2,40,000', emailDate: '14 Sep 2026', confidence: 78 },
-    { id: 3, customer: 'Global Metworks', type: 'Purchase', poNumber: 'PO-2024-0893', items: 'Copper Pipes, Fittings', value: '₹62,500', emailDate: '14 Sep 2026', confidence: 55 },
-  ],
-  'Needs Review': [
-    { id: 4, customer: 'DEF Corp', type: 'Purchase', poNumber: 'PO-2024-0894', items: 'Steel Rods', value: '₹95,000', emailDate: '13 Sep 2026', confidence: 65 },
-    { id: 5, customer: 'GHI Industries', type: 'Sales', poNumber: 'SO-2024-0345', items: 'Aluminum Sheets', value: '₹1,20,000', emailDate: '12 Sep 2026', confidence: 42 },
-  ],
-  Confirmed: [
-    { id: 6, customer: 'JKL Steel', type: 'Purchase', poNumber: 'PO-2024-0895', items: 'Iron Ore', value: '₹3,50,000', emailDate: '11 Sep 2026', confidence: 98 },
-    { id: 7, customer: 'MNO Chemicals', type: 'Sales', poNumber: 'SO-2024-0346', items: 'Industrial Adhesives', value: '₹75,000', emailDate: '10 Sep 2026', confidence: 92 },
-    { id: 8, customer: 'PQR Metals', type: 'Purchase', poNumber: 'PO-2024-0896', items: 'Copper Wire', value: '₹1,50,000', emailDate: '09 Sep 2026', confidence: 96 },
-    { id: 9, customer: 'STU Industries', type: 'Sales', poNumber: 'SO-2024-0347', items: 'Steel Tubes', value: '₹2,10,000', emailDate: '08 Sep 2026', confidence: 99 },
-    { id: 10, customer: 'VWX Corp', type: 'Purchase', poNumber: 'PO-2024-0897', items: 'Fasteners', value: '₹45,000', emailDate: '07 Sep 2026', confidence: 94 },
-  ],
-  Ignored: [
-    { id: 11, customer: 'YZ Industries', type: 'Sales', poNumber: 'SO-2024-0348', items: 'Misc Items', value: '₹25,000', emailDate: '06 Sep 2026', confidence: 30 },
-  ],
-};
-
-const tabs = [
-  { label: 'New', count: allOrders.New.length },
-  { label: 'Needs Review', count: allOrders['Needs Review'].length },
-  { label: 'Confirmed', count: allOrders.Confirmed.length },
-  { label: 'Ignored', count: allOrders.Ignored.length },
-];
+const tabOrder = ['New', 'Needs Review', 'Confirmed', 'Ignored'];
 
 export default function AIOrderInbox() {
   const [activeTab, setActiveTab] = useState('New');
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [extracts, setExtracts] = useState([]);
+  const [counts, setCounts] = useState({ New: 0, 'Needs Review': 0, Confirmed: 0, Ignored: 0 });
+  const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
   const actionRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get('/ai-inbox')
+      .then((res) => {
+        if (mounted) {
+          setExtracts(res.data.extracts || []);
+          setCounts(res.data.counts || { New: 0, 'Needs Review': 0, Confirmed: 0, Ignored: 0 });
+        }
+      })
+      .catch(() => {
+        if (mounted) toast.error('Failed to load inbox');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -60,10 +60,62 @@ export default function AIOrderInbox() {
     return 'low';
   }
 
-  const currentOrders = allOrders[activeTab].filter((order) => {
-    if (filter === 'all') return true;
-    return order.type.toLowerCase() === filter;
-  });
+  const formatValue = (value) =>
+    value ? `₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—';
+
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const date = new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
+    if (Number.isNaN(date.getTime())) return d;
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const displayExtracts = extracts.map((o) => ({
+    id: o.id,
+    customer: o.customer_name || '—',
+    type: o.order_type || '—',
+    poNumber: o.po_number || '—',
+    items: o.items || '—',
+    value: formatValue(o.approx_value),
+    emailDate: formatDate(o.email_date),
+    confidence: Number(o.confidence) || 0,
+    status: o.status,
+  }));
+
+  const currentOrders = displayExtracts
+    .filter((order) => order.status === activeTab)
+    .filter((order) => {
+      if (filter === 'all') return true;
+      return order.type.toLowerCase() === filter;
+    })
+    .filter((order) => {
+      const term = searchTerm.trim().toLowerCase();
+      if (!term) return true;
+      return (
+        order.customer.toLowerCase().includes(term) ||
+        order.poNumber.toLowerCase().includes(term)
+      );
+    });
+
+  const tabs = tabOrder.map((label) => ({ label, count: counts[label] || 0 }));
+
+  const handleDelete = async (orderId, label) => {
+    if (!window.confirm(`Delete "AI extracted order ${label}"? This cannot be undone.`)) return;
+    setOpenAction(null);
+    try {
+      await api.delete(`/ai-inbox/${orderId}`);
+      setExtracts((prev) => prev.filter((o) => o.id !== orderId));
+      setCounts((prev) => {
+        const removed = extracts.find((o) => o.id === orderId);
+        const key = removed?.status || 'New';
+        const next = { ...prev, [key]: Math.max((prev[key] || 0) - 1, 0) };
+        return next;
+      });
+      toast.success('Entry deleted');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete entry');
+    }
+  };
 
   return (
     <>
@@ -98,7 +150,13 @@ export default function AIOrderInbox() {
         <div className='col-lg-12'>
           <div className="search-filter-bar">
             <div className="custom-frm-bx flex-grow-1">
-              <input type="text" className='form-control' placeholder="Search by PO, customer..." />
+              <input
+                type="text"
+                className='form-control'
+                placeholder="Search by PO, customer..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
             <div className='custom-frm-bx'>
               <select
@@ -136,7 +194,17 @@ export default function AIOrderInbox() {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentOrders.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="9">
+                        <div className="d-flex justify-content-center align-items-center" style={{ height: '200px' }} role="status">
+                          <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : currentOrders.length > 0 ? (
                     currentOrders.map((order, idx) => (
                       <tr key={order.id}>
                         <td>{idx + 1}</td>
@@ -168,10 +236,10 @@ export default function AIOrderInbox() {
                                 <Link to={`/app/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                   <FiEye /> Review
                                 </Link>
-                                <Link to="#" className="order-dropdown-item">
+                                <Link to={`/app/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                   <FiEdit2 /> Edit Details
                                 </Link>
-                                <Link to="#" className="order-dropdown-item text-danger">
+                                <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.poNumber); }}>
                                   <FiTrash2 /> Delete
                                 </Link>
                               </div>
@@ -182,7 +250,7 @@ export default function AIOrderInbox() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="9" className="text-center">No orders found</td>
+                      <td colSpan="9" className="text-center py-4">No orders found</td>
                     </tr>
                   )}
                 </tbody>

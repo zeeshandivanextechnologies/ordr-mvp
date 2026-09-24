@@ -2,16 +2,41 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
 import { exportToCSV, printPage } from '../../utils/exportUtils';
+import api from '../../services/api';
+import { toast } from 'react-toastify';
 import '../../styles/member.css';
 import { LuChevronDown } from 'react-icons/lu';
+
+const currencySymbols = { INR: '₹', USD: '$', AED: 'AED', SAR: 'SAR' };
 
 export default function Orders() {
   const [activeTab, setActiveTab] = useState('sales');
   const [showDropdown, setShowDropdown] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
   const dropdownRef = useRef(null);
   const actionRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get('/orders')
+      .then((res) => {
+        if (mounted) setOrders(res.data.orders || []);
+      })
+      .catch(() => {
+        if (mounted) toast.error('Failed to load orders');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -26,17 +51,9 @@ export default function Orders() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const orders = [
-    { customer: 'ABC Industries', po: 'PO-8192', material: 'Industrial Valves', qty: '250 pcs', value: '₹6,20,000', due: '22 Sep 2026', status: 'processing', type: 'sales' },
-    { customer: 'XYZ Chemicals', po: 'PO-8193', material: 'Chemical Drums', qty: '500 units', value: '₹1,45,000', due: '18 Sep 2026', status: 'in-transit', type: 'purchase' },
-    { customer: 'Global Pharma Ltd', po: 'PO-8194', material: 'Packaging Material', qty: '10,000 sets', value: '₹3,80,000', due: '25 Sep 2026', status: 'ready-dispatch', type: 'sales' },
-    { customer: 'MediCorp Solutions', po: 'PO-8195', material: 'Medical Gloves', qty: '20,000 pcs', value: '₹92,000', due: '17 Sep 2026', status: 'delayed', type: 'purchase' },
-    { customer: 'TechParts India', po: 'PO-8196', material: 'Steel Fasteners', qty: '5,000 kg', value: '₹2,15,000', due: '20 Sep 2026', status: 'delivered', type: 'sales' },
-    { customer: 'FreshMart Supplies', po: 'PO-8197', material: 'Corrugated Boxes', qty: '3,000 pcs', value: '₹78,000', due: '23 Sep 2026', status: 'dispatched', type: 'purchase' },
-  ];
-
   const filterOptions = [
     { value: 'all', label: 'All' },
+    { value: 'received', label: 'Received' },
     { value: 'processing', label: 'Processing' },
     { value: 'ready-dispatch', label: 'Ready for Dispatch' },
     { value: 'dispatched', label: 'Dispatched' },
@@ -46,6 +63,7 @@ export default function Orders() {
   ];
 
   const statusLabels = {
+    received: 'Received',
     processing: 'Processing',
     'ready-dispatch': 'Ready for Dispatch',
     dispatched: 'Dispatched',
@@ -54,13 +72,46 @@ export default function Orders() {
     delivered: 'Delivered',
   };
 
-  const salesCount = orders.filter(o => o.type === 'sales').length;
-  const purchaseCount = orders.filter(o => o.type === 'purchase').length;
+  const formatMoney = (value, currency) => {
+    const sym = currencySymbols[currency] || currency || '';
+    return `${sym}${(Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  };
 
-  const filteredOrders = orders.filter((o) => {
-    const matchesTab = activeTab === 'all' || o.type === activeTab;
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const date = new Date(d + (String(d).length === 10 ? 'T00:00:00' : ''));
+    if (Number.isNaN(date.getTime())) return d;
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const displayOrders = orders.map((o) => {
+    const status = String(o.status || '').toLowerCase();
+    const qty = Number(o.total_qty) || 0;
+    return {
+      id: o.id,
+      customer: o.party_name,
+      po: o.po_number,
+      material: o.material || '—',
+      qty: qty > 0 ? `${qty.toLocaleString()}${o.material_unit ? ' ' + o.material_unit : ''}` : '—',
+      value: formatMoney(o.total_value, o.currency),
+      due: formatDate(o.required_delivery_date),
+      status,
+      type: o.order_type,
+    };
+  });
+
+  const salesCount = orders.filter((o) => o.order_type === 'sales').length;
+  const purchaseCount = orders.filter((o) => o.order_type === 'purchase').length;
+
+  const filteredOrders = displayOrders.filter((o) => {
+    const matchesTab = activeTab === 'sales' || activeTab === 'purchase' ? o.type === activeTab : true;
     const matchesFilter = filter === 'all' || o.status === filter;
-    return matchesTab && matchesFilter;
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !term ||
+      o.customer.toLowerCase().includes(term) ||
+      o.po.toLowerCase().includes(term);
+    return matchesTab && matchesFilter && matchesSearch;
   });
 
   const handleExport = () => {
@@ -75,6 +126,18 @@ export default function Orders() {
       'Status': statusLabels[o.status],
     }));
     exportToCSV(data, `${activeTab}_orders`);
+  };
+
+  const handleDelete = async (orderId, label) => {
+    if (!window.confirm(`Delete order ${label}? This cannot be undone.`)) return;
+    setOpenAction(null);
+    try {
+      await api.delete(`/orders/${orderId}`);
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      toast.success('Order deleted');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete order');
+    }
   };
 
   return (
@@ -148,7 +211,7 @@ export default function Orders() {
         <div className='col-lg-12'>
           <div className="search-filter-bar">
         <div className="custom-frm-bx flex-grow-1">
-          <input type="text" className='form-control' placeholder="Search by customer, PO number..." />
+          <input type="text" className='form-control' placeholder="Search by customer, PO number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <div className='custom-frm-bx'>
           <select
@@ -188,7 +251,22 @@ export default function Orders() {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order, idx) => (
+              {loading ? (
+                <tr>
+                  <td colSpan="9" className="text-center py-4">
+                    <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
+      <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+        <span className="visually-hidden">Loading...</span>
+      </div>
+    </div>
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="9" className="text-center py-4">No orders found</td>
+                </tr>
+              ) : (
+                filteredOrders.map((order, idx) => (
                 <tr key={idx}>
                   <td>{idx + 1}</td>
                   <td>{order.customer}</td>
@@ -212,13 +290,13 @@ export default function Orders() {
                       </button>
                       {openAction === idx && (
                         <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
-                          <Link to={`/app/orders/${idx + 1}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                          <Link to={`/app/orders/${order.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                             <FiEye /> View Details
                           </Link>
-                          <Link to="#" className="order-dropdown-item">
-                            <FiEdit2 /> Edit Details
+                          <Link to="/app/orders/add" state={{ editId: order.id }} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                            <FiEdit2 /> Edit
                           </Link>
-                          <Link to="#" className="order-dropdown-item text-danger">
+                          <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.po); }}>
                             <FiTrash2 /> Delete
                           </Link>
                         </div>
@@ -226,7 +304,8 @@ export default function Orders() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

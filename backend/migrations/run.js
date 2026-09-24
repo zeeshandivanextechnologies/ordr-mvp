@@ -6,6 +6,11 @@ import { up as up4, down as down4 } from './004_drop_unused_user_fields.js';
 import { up as up5, down as down5 } from './005_add_user_profile_fields.js';
 import { up as up6, down as down6 } from './006_create_notification_preferences.js';
 import { up as up7, down as down7 } from './007_avatar_url_text.js';
+import { up as up8, down as down8 } from './008_create_orders_tables.js';
+import { up as up9, down as down9 } from './009_add_order_items_company_id.js';
+import { up as up10, down as down10 } from './010_create_po_documents.js';
+import { up as up11, down as down11 } from './011_create_shipments.js';
+import { up as up12, down as down12 } from './012_create_ai_order_extracts.js';
 
 async function runMigrations() {
   try {
@@ -17,6 +22,11 @@ async function runMigrations() {
     await query(up5);
     await query(up6);
     await query(up7);
+    await query(up8);
+    await query(up9);
+    await query(up10);
+    await query(up11);
+    await query(up12);
     console.log('Migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

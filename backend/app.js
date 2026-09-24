@@ -43,10 +43,14 @@ import companyRoutes from './routes/company.js';
 app.use('/api/company', companyRoutes);
 import integrationRoutes from './routes/integration.js';
 app.use('/api/integration', integrationRoutes);
+import ordersRoutes from './routes/orders.js';
+app.use('/api/orders', ordersRoutes);
 import teamRoutes from './routes/team.js';
 app.use('/api/team', teamRoutes);
 import notificationRoutes from './routes/notifications.js';
 app.use('/api/notifications', notificationRoutes);
+import aiInboxRoutes from './routes/aiInbox.js';
+app.use('/api/ai-inbox', aiInboxRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

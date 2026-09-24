@@ -10,7 +10,7 @@ import '../../styles/member.css';
 
 function TabLoader() {
   return (
-    <div className="d-flex justify-content-center align-items-center py-5" role="status">
+    <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
       <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
         <span className="visually-hidden">Loading...</span>
       </div>
