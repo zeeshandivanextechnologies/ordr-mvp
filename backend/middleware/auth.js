@@ -12,12 +12,17 @@ export const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(token, config.jwtSecret);
     const result = await query(
-      'SELECT id, company_id, full_name, email, role, is_active FROM users WHERE id = $1',
+      'SELECT id, company_id, full_name, email, role, is_active, removed_at FROM users WHERE id = $1',
       [decoded.userId]
     );
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Removed from the team: end the session
+    if (result.rows[0].removed_at) {
+      return res.status(401).json({ error: 'Your account was removed from this team' });
     }
 
     if (!result.rows[0].is_active) {

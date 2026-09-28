@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "migrate": "node migrations/run.js",
-    "seed": "node seeds/run.js"
+    "seed": "node seeds/run.js",
+    "test": "node --test --test-concurrency=1 tests/api.test.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

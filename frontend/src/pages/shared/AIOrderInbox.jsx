@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSearch, FiEye, FiChevronDown, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiEye, FiChevronDown, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../components/AuthProvider';
+import { confidenceLevel } from '../../utils/confidence';
 import '../../styles/member.css';
 
 const tabOrder = ['New', 'Needs Review', 'Confirmed', 'Ignored'];
 
 export default function AIOrderInbox() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [activeTab, setActiveTab] = useState('New');
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,14 +58,14 @@ export default function AIOrderInbox() {
     { value: 'sales', label: 'Sales' },
   ];
 
-  function getConfidenceClass(confidence) {
-    if (confidence > 90) return 'high';
-    if (confidence >= 70) return 'medium';
-    return 'low';
-  }
+  // Same thresholds as the Review page (utils/confidence.js)
+  const getConfidenceClass = (confidence) => confidenceLevel(confidence);
 
-  const formatValue = (value) =>
-    value ? `₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—';
+  const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ', SAR: 'SAR ' };
+  const formatValue = (value, currency) =>
+    value
+      ? `${currency ? (currencySymbols[currency] ?? `${currency} `) : '₹'}${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      : '—';
 
   const formatDate = (d) => {
     if (!d) return '—';
@@ -76,7 +80,8 @@ export default function AIOrderInbox() {
     type: o.order_type || '—',
     poNumber: o.po_number || '—',
     items: o.items || '—',
-    value: formatValue(o.approx_value),
+    itemCount: Number(o.item_count) || 0,
+    value: formatValue(o.approx_value, o.currency),
     emailDate: formatDate(o.email_date),
     confidence: Number(o.confidence) || 0,
     status: o.status,
@@ -93,7 +98,8 @@ export default function AIOrderInbox() {
       if (!term) return true;
       return (
         order.customer.toLowerCase().includes(term) ||
-        order.poNumber.toLowerCase().includes(term)
+        order.poNumber.toLowerCase().includes(term) ||
+        order.items.toLowerCase().includes(term)
       );
     });
 
@@ -186,7 +192,7 @@ export default function AIOrderInbox() {
                     <th>Customer/Supplier</th>
                     <th>Order Type</th>
                     <th>PO Number</th>
-                    <th>Items</th>
+                    <th>No. of Items</th>
                     <th>Approx Value</th>
                     <th>Email Date</th>
                     <th>AI Confidence</th>
@@ -215,7 +221,7 @@ export default function AIOrderInbox() {
                           </span>
                         </td>
                         <td className="po-number">{order.poNumber}</td>
-                        <td>{order.items}</td>
+                        <td title={order.items !== '—' ? order.items : undefined}>{order.itemCount > 0 ? order.itemCount : '—'}</td>
                         <td>{order.value}</td>
                         <td>{order.emailDate}</td>
                         <td>
@@ -239,9 +245,11 @@ export default function AIOrderInbox() {
                                 <Link to={`/app/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                   <FiEdit2 /> Edit Details
                                 </Link>
-                                <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.poNumber); }}>
-                                  <FiTrash2 /> Delete
-                                </Link>
+                                {isAdmin && (
+                                  <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.poNumber); }}>
+                                    <FiTrash2 /> Delete
+                                  </Link>
+                                )}
                               </div>
                             )}
                           </div>

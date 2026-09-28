@@ -61,6 +61,8 @@ export default function AdminSettings() {
     shipment_alerts: true,
     ai_order_detection: false,
     delivery_reminders: false,
+    delay_alerts: true,
+    stale_alerts: true,
   });
   const [savingNotifications, setSavingNotifications] = useState(false);
 
@@ -73,6 +75,8 @@ export default function AdminSettings() {
     industry: '',
     country: '',
     timezone: '',
+    due_soon_days: 1,
+    stale_days: 5,
   });
   const [companyLoading, setCompanyLoading] = useState(true);
   const [savingCompany, setSavingCompany] = useState(false);
@@ -91,6 +95,8 @@ export default function AdminSettings() {
             industry: c.industry || '',
             country: c.country || '',
             timezone: c.timezone || '',
+            due_soon_days: c.due_soon_days ?? 1,
+            stale_days: c.stale_days ?? 5,
           });
         } catch {
           if (mounted) toast.error('Failed to load company details');
@@ -115,6 +121,8 @@ export default function AdminSettings() {
         industry: company.industry,
         country: company.country,
         timezone: company.timezone,
+        due_soon_days: company.due_soon_days === '' ? undefined : Number(company.due_soon_days),
+        stale_days: company.stale_days === '' ? undefined : Number(company.stale_days),
       });
       updateUser({ company_name: company.name });
       toast.success('Company details updated successfully');
@@ -146,7 +154,8 @@ export default function AdminSettings() {
   const handleConnectGmail = async () => {
     setConnectingGmail(true);
     try {
-      const res = await integrationService.getGmailConnectUrl();
+      // Return to the Integrations page (it shows the result and scan controls), not onboarding
+      const res = await integrationService.getGmailConnectUrl('/app/integrations');
       if (res.url) {
         window.location.href = res.url;
       }
@@ -159,8 +168,10 @@ export default function AdminSettings() {
   const notificationLabels = {
     email_notifications: 'Email notifications',
     shipment_alerts: 'Shipment alerts',
-    ai_order_detection: 'AI order detection',
-    delivery_reminders: 'Delivery reminders',
+    ai_order_detection: 'New order detection',
+    delivery_reminders: 'Delivery alerts',
+    delay_alerts: 'Delay alerts',
+    stale_alerts: 'Stale order alerts',
   };
 
   const handleNotificationsChange = (field, value) => {
@@ -249,6 +260,8 @@ export default function AdminSettings() {
           shipment_alerts: p.shipment_alerts ?? true,
           ai_order_detection: p.ai_order_detection ?? false,
           delivery_reminders: p.delivery_reminders ?? false,
+          delay_alerts: p.delay_alerts ?? true,
+          stale_alerts: p.stale_alerts ?? true,
         });
         setNotifLoaded(true);
       } catch {
@@ -705,6 +718,18 @@ export default function AdminSettings() {
                         </select>
                       </div>
                     </div>
+                    <div className="col-lg-6 col-md-6 col-sm-12">
+                      <div className="custom-frm-bx">
+                        <label>Due Soon Alert (days before due date)</label>
+                        <input type="number" className="form-control" min="0" max="30" step="1" value={company.due_soon_days} onChange={(e) => handleCompanyChange('due_soon_days', e.target.value)} disabled={companyLoading} />
+                      </div>
+                    </div>
+                    <div className="col-lg-6 col-md-6 col-sm-12">
+                      <div className="custom-frm-bx">
+                        <label>Stale Order Alert (days without update)</label>
+                        <input type="number" className="form-control" min="1" max="60" step="1" value={company.stale_days} onChange={(e) => handleCompanyChange('stale_days', e.target.value)} disabled={companyLoading} />
+                      </div>
+                    </div>
                     <div className="col-lg-12 text-end">
                       <button type="submit" className="thm-btn" disabled={savingCompany || companyLoading}><FiSave /> {savingCompany ? 'Saving...' : 'Save Changes'}</button>
                     </div>
@@ -852,10 +877,11 @@ export default function AdminSettings() {
                 notifLoading ? <TabLoader /> :
                 <div className="row">
                   {[
-                    { key: 'email_notifications', label: 'Email Notifications', desc: 'Receive order updates via email' },
-                    { key: 'shipment_alerts', label: 'Shipment Alerts', desc: 'Get notified when shipment status changes' },
-                    { key: 'ai_order_detection', label: 'AI Order Detection', desc: 'Notify when new order detected from email' },
-                    { key: 'delivery_reminders', label: 'Delivery Reminders', desc: 'Reminder before delivery due date' },
+                    { key: 'email_notifications', label: 'Email Notifications', desc: 'Also send the alerts below to my email (in-app notifications are always shown)' },
+                    { key: 'ai_order_detection', label: 'New Order Detection', desc: 'When a new order is detected from email or an upload' },
+                    { key: 'delivery_reminders', label: 'Delivery Alerts', desc: 'Delivery due soon, shipment delivered and partial balance pending' },
+                    { key: 'delay_alerts', label: 'Delay Alerts', desc: 'When an order is overdue or a shipment is delayed' },
+                    { key: 'stale_alerts', label: 'Stale Order Alerts', desc: 'When an order has had no update for several days' },
                   ].map((item, idx) => (
                     <div className="col-md-6 mb-3" key={idx}>
                        <div className="d-flex justify-content-between align-items-center">

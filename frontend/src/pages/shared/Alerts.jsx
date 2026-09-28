@@ -1,90 +1,47 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { FiAlertTriangle, FiAlertCircle, FiInfo, FiCheck, FiX } from 'react-icons/fi';
+import api from '../../services/api';
+import { timeAgo } from '../../utils/notificationDisplay';
 import '../../styles/member.css';
 
 export default function Alerts() {
   const [activeTab, setActiveTab] = useState('all');
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
 
-const alerts = [
-  {
-    id: 1,
-    type: 'overdue',
-    severity: 'critical',
-    title: 'Overdue Order',
-    description: 'PO-8192 is 2 days overdue. 5 MT still pending.',
-    order: 'PO-8192',
-    customer: 'ABC Industries',
-    time: '2 hours ago',
-    status: 'open',
-  },
-  {
-    id: 2,
-    type: 'partial',
-    severity: 'warning',
-    title: 'Partial Fulfilment',
-    description: '6 MT dispatched, 4 MT still pending for PO-8195.',
-    order: 'PO-8195',
-    customer: 'MediCorp Solutions',
-    time: '5 hours ago',
-    status: 'open',
-  },
-  {
-    id: 3,
-    type: 'stale',
-    severity: 'warning',
-    title: 'Stale Order - No Update',
-    description: 'PO-8193 has no update for 5 days.',
-    order: 'PO-8193',
-    customer: 'XYZ Chemicals',
-    time: '1 day ago',
-    status: 'open',
-  },
-  {
-    id: 4,
-    type: 'due-soon',
-    severity: 'info',
-    title: 'Delivery Due Soon',
-    description: 'PO-8197 is due tomorrow. Shipment is in transit.',
-    order: 'PO-8197',
-    customer: 'FreshMart Supplies',
-    time: '1 day ago',
-    status: 'open',
-  },
-  {
-    id: 5,
-    type: 'missing-tracking',
-    severity: 'warning',
-    title: 'Missing Tracking Number',
-    description: 'SHP-2026-4821 is dispatched but tracking is missing.',
-    order: 'PO-8192',
-    customer: 'ABC Industries',
-    time: '2 days ago',
-    status: 'open',
-  },
-  {
-    id: 6,
-    type: 'ai-pending',
-    severity: 'info',
-    title: 'AI Review Pending',
-    description: '3 orders have been pending review for 24+ hours.',
-    order: '-',
-    customer: '-',
-    time: '3 days ago',
-    status: 'resolved',
-  },
-  {
-    id: 7,
-    type: 'overdue',
-    severity: 'critical',
-    title: 'Overdue Order',
-    description: 'PO-8194 is 1 day overdue. Packaging delivery pending.',
-    order: 'PO-8194',
-    customer: 'Global Pharma Ltd',
-    time: '3 days ago',
-    status: 'dismissed',
-  },
-];
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get('/alerts');
+      setRows(res.data.alerts || []);
+    } catch {
+      toast.error('Failed to load alerts');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const alerts = rows.map((a) => ({
+    id: a.id,
+    type: a.type,
+    severity: a.severity,
+    title: a.title,
+    description: a.description,
+    order: a.po_number || '-',
+    customer: a.party_name || '-',
+    time: timeAgo(a.created_at),
+    status: a.status,
+    link: a.link,
+  }));
+
   const tabs = [
     { key: 'all', label: 'All Alerts' },
     { key: 'open', label: 'Open' },
@@ -105,13 +62,44 @@ const alerts = [
     info: { icon: <FiInfo />, color: '#1565c0', bg: '#e3f2fd' },
   };
 
+  const term = searchTerm.trim().toLowerCase();
   const filteredAlerts = alerts.filter((a) => {
     const matchesTab = activeTab === 'all' || a.status === activeTab;
     const matchesSeverity = filter === 'all' || a.severity === filter;
-    return matchesTab && matchesSeverity;
+    const matchesSearch =
+      !term ||
+      [a.title, a.description, a.order, a.customer].some((v) => String(v || '').toLowerCase().includes(term));
+    return matchesTab && matchesSeverity && matchesSearch;
   });
 
   const openCount = alerts.filter((a) => a.status === 'open').length;
+
+  const updateStatus = async (alertId, action) => {
+    setBusyId(alertId);
+    try {
+      await api.post(`/alerts/${alertId}/${action}`);
+      setRows((prev) => prev.map((a) => (a.id === alertId ? { ...a, status: action === 'dismiss' ? 'dismissed' : 'resolved' } : a)));
+      toast.success(action === 'dismiss' ? 'Alert dismissed' : 'Alert resolved');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update alert');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const resolveAll = async () => {
+    if (!window.confirm(`Mark all ${openCount} open alerts as resolved?`)) return;
+    setBusyId('all');
+    try {
+      await api.post('/alerts/resolve-all');
+      setRows((prev) => prev.map((a) => (a.status === 'open' ? { ...a, status: 'resolved' } : a)));
+      toast.success('All open alerts resolved');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to resolve alerts');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <>
@@ -123,8 +111,8 @@ const alerts = [
               <p>Stay on top of overdue orders, partial shipments, and pending reviews</p>
             </div>
             {openCount > 0 && (
-              <button className="thm-btn outline">
-                <FiCheck /> Mark All Resolved
+              <button className="thm-btn outline" onClick={resolveAll} disabled={busyId === 'all'}>
+                <FiCheck /> {busyId === 'all' ? 'Resolving...' : 'Mark All Resolved'}
               </button>
             )}
           </div>
@@ -154,7 +142,13 @@ const alerts = [
         <div className='col-lg-12'>
           <div className="search-filter-bar">
             <div className="custom-frm-bx flex-grow-1">
-              <input type="text" className='form-control' placeholder="Search alerts..." />
+              <input
+                type="text"
+                className='form-control'
+                placeholder="Search alerts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
             <div className='custom-frm-bx'>
               <select
@@ -176,7 +170,9 @@ const alerts = [
       <div className="row">
         <div className="col-lg-12">
           <div className="member-card">
-            {filteredAlerts.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-4 text-secondary">Loading alerts...</div>
+            ) : filteredAlerts.length === 0 ? (
               <div className="member-empty-state">
                 <div className="empty-icon"><FiCheck /></div>
                 <h4>No alerts</h4>
@@ -185,7 +181,7 @@ const alerts = [
             ) : (
               <div className="alert-list">
                 {filteredAlerts.map((alert) => {
-                  const sev = severityConfig[alert.severity];
+                  const sev = severityConfig[alert.severity] || severityConfig.info;
                   return (
                     <div key={alert.id} className={`alert-item ${alert.status}`}>
                       <div className="alert-icon" style={{ background: sev.bg, color: sev.color }}>
@@ -202,7 +198,11 @@ const alerts = [
                           </span>
                         </div>
                         <div className="alert-meta">
-                          <span>{alert.order !== '-' ? alert.order : ''}</span>
+                          <span>
+                            {alert.order !== '-'
+                              ? (alert.link ? <Link to={alert.link}>{alert.order}</Link> : alert.order)
+                              : ''}
+                          </span>
                           {alert.order !== '-' && alert.customer !== '-' && <span className="mx-2">|</span>}
                           <span>{alert.customer !== '-' ? alert.customer : ''}</span>
                           <span className="mx-2">|</span>
@@ -210,10 +210,19 @@ const alerts = [
                         </div>
                         {alert.status === 'open' && (
                           <div className="alert-actions mt-2">
-                            <button className="thm-btn outline py-1 px-3" style={{ fontSize: 14 }}>
+                            <button
+                              className="thm-btn outline py-1 px-3"
+                              style={{ fontSize: 14 }}
+                              onClick={() => updateStatus(alert.id, 'resolve')}
+                              disabled={busyId === alert.id}
+                            >
                               <FiCheck /> Resolve
                             </button>
-                            <button className="alert-dismiss-btn">
+                            <button
+                              className="alert-dismiss-btn"
+                              onClick={() => updateStatus(alert.id, 'dismiss')}
+                              disabled={busyId === alert.id}
+                            >
                               <FiX /> Dismiss
                             </button>
                           </div>

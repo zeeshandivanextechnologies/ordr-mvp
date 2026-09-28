@@ -20,12 +20,14 @@ const pool = new pg.Pool({
   ...poolConfig,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 
+// An idle client error (e.g. hosted Postgres dropping an idle connection)
+// must not crash the whole backend. The pool replaces bad connections
+// automatically on the next query.
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  process.exit(-1);
 });
 
 export const query = (text, params) => pool.query(text, params);

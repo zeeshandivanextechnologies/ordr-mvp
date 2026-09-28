@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FiArrowLeft } from 'react-icons/fi';
 import api from '../../services/api';
@@ -28,15 +28,47 @@ export default function AddShipment() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // Order items, so each item's quantity can be entered separately (multi-item orders)
+  const [orderItems, setOrderItems] = useState([]);
+  const [itemQty, setItemQty] = useState({});
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get(`/orders/${id}`)
+      .then((res) => {
+        if (mounted) setOrderItems(res.data.items || []);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
+  const remainingOf = (item) => Math.max((Number(item.quantity) || 0) - (Number(item.dispatched) || 0), 0);
+  const multiItem = orderItems.length > 1;
+  const singleItem = orderItems.length === 1 ? orderItems[0] : null;
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.shipmentNumber.trim()) {
       toast.error('Shipment Number is required');
       return;
     }
+    let payload = formData;
+    if (multiItem) {
+      const lineItems = orderItems
+        .filter((item) => itemQty[item.id] !== undefined && String(itemQty[item.id]).trim() !== '')
+        .map((item) => ({ orderItemId: item.id, quantity: itemQty[item.id] }));
+      if (lineItems.length === 0) {
+        toast.error('Enter the quantity for at least one item');
+        return;
+      }
+      const { quantity: _unused, ...rest } = formData;
+      payload = { ...rest, lineItems };
+    }
     try {
       setLoading(true);
-      await api.post(`/orders/${id}/shipments`, formData);
+      await api.post(`/orders/${id}/shipments`, payload);
       toast.success('Shipment created successfully');
       navigate(`/app/orders/${id}`);
     } catch (err) {
@@ -48,7 +80,17 @@ export default function AddShipment() {
 
   const fields = [
     { name: 'shipmentNumber', label: 'Shipment Number', type: 'text', placeholder: 'e.g. SHP-2203', required: true },
-    { name: 'quantity', label: 'Quantity', type: 'number', placeholder: 'Enter quantity' },
+    // Multi-item orders enter quantities per item in the table below instead
+    ...(multiItem
+      ? []
+      : [{
+          name: 'quantity',
+          label: 'Quantity',
+          type: 'number',
+          placeholder: singleItem
+            ? `Enter quantity (${remainingOf(singleItem).toLocaleString('en-IN')} ${singleItem.unit || ''} left)`
+            : 'Enter quantity',
+        }]),
   ];
 
   return (
@@ -79,6 +121,51 @@ export default function AddShipment() {
                   </div>
                 </div>
               ))}
+
+              {multiItem && (
+                <div className="col-lg-12">
+                  <div className="custom-frm-bx">
+                    <label className="">Items to Ship</label>
+                    <div className="table-responsive">
+                      <table className="member-table">
+                        <thead>
+                          <tr>
+                            <th>Product / Material</th>
+                            <th>Ordered</th>
+                            <th>Remaining</th>
+                            <th>Ship Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {orderItems.map((item) => {
+                            const remaining = remainingOf(item);
+                            return (
+                              <tr key={item.id}>
+                                <td>{item.product}</td>
+                                <td>{(Number(item.quantity) || 0).toLocaleString('en-IN')} {item.unit}</td>
+                                <td>{remaining.toLocaleString('en-IN')} {item.unit}</td>
+                                <td>
+                                  <input
+                                    type="number"
+                                    className="form-control"
+                                    min="0"
+                                    max={remaining}
+                                    step="any"
+                                    disabled={remaining <= 0}
+                                    placeholder={remaining <= 0 ? 'Fully shipped' : '0'}
+                                    value={itemQty[item.id] ?? ''}
+                                    onChange={(e) => setItemQty((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="col-lg-12">
                 <div className="custom-frm-bx">

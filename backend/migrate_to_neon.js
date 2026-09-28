@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import pg from 'pg';
 const { Client } = pg;
 import { up as up1 } from './migrations/001_initial.js';
@@ -5,8 +6,13 @@ import { up as up2 } from './migrations/002_add_tracking_preferences.js';
 import { up as up3 } from './migrations/003_add_team_invitations.js';
 import { up as up4 } from './migrations/004_drop_unused_user_fields.js';
 
-const LOCAL_DB_URL = "postgresql://postgres:admin@localhost:5432/ordr_db";
-const NEON_DB_URL = "postgresql://neondb_owner:npg_g54aUywTlRZQ@ep-nameless-bird-b42c7nwv-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+// Connection strings come from .env (never hard-code database passwords)
+const LOCAL_DB_URL = process.env.LOCAL_DATABASE_URL;
+const NEON_DB_URL = process.env.NEON_DATABASE_URL;
+if (!LOCAL_DB_URL || !NEON_DB_URL) {
+  console.error('Set LOCAL_DATABASE_URL and NEON_DATABASE_URL in backend/.env to run this script.');
+  process.exit(1);
+}
 
 async function transferData() {
   const localClient = new Client({ connectionString: LOCAL_DB_URL });

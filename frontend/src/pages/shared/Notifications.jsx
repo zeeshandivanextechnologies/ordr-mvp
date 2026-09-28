@@ -1,45 +1,82 @@
-import { FiBell, FiMail, FiAlertCircle, FiPackage, FiClock, FiCheckCircle, FiTruck } from 'react-icons/fi';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import notificationService from '../../services/notificationService';
+import {
+  notificationStyle,
+  timeAgo,
+  notifyNotificationsChanged,
+  onNotificationsChanged,
+} from '../../utils/notificationDisplay';
 import '../../styles/member.css';
 
 export default function Notifications() {
-const notifications = [
-  {
-    id: 1,
-    icon: <FiMail />,
-    title: 'New Order Detected',
-    description: 'New purchase order detected. Review and confirm.',
-    time: '5 minutes ago',
-    unread: true,
-    color: '#1565c0',
-  },
-  {
-    id: 2,
-    icon: <FiClock />,
-    title: 'Delivery Due Tomorrow',
-    description: 'Shipment SHP-2026-4821 is due tomorrow.',
-    time: '1 hour ago',
-    unread: true,
-    color: '#e65100',
-  },
-  {
-    id: 3,
-    icon: <FiAlertCircle />,
-    title: 'Shipment Delayed',
-    description: 'Shipment SHP-2026-4823 has been delayed.',
-    time: '3 hours ago',
-    unread: false,
-    color: '#c62828',
-  },
-  {
-    id: 4,
-    icon: <FiPackage />,
-    title: 'AI Review Required',
-    description: '2 orders are waiting for your review.',
-    time: '5 hours ago',
-    unread: false,
-    color: '#2D4735',
-  },
-];
+  const [items, setItems] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [markingAll, setMarkingAll] = useState(false);
+  const navigate = useNavigate();
+
+  const load = useCallback(async () => {
+    try {
+      const data = await notificationService.getInbox(100);
+      setItems(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    } catch {
+      toast.error('Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Stay in sync when notifications are read from the header bell
+  useEffect(() => onNotificationsChanged(load), [load]);
+
+  const notifications = items.map((n) => {
+    const style = notificationStyle(n.type);
+    return {
+      id: n.id,
+      icon: style.icon,
+      color: style.color,
+      title: n.title,
+      description: n.message,
+      time: timeAgo(n.created_at),
+      unread: !n.read_at,
+      link: n.link,
+    };
+  });
+
+  const handleOpen = async (notification) => {
+    if (notification.unread) {
+      setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n)));
+      setUnreadCount((c) => Math.max(c - 1, 0));
+      notificationService
+        .markRead(notification.id)
+        .then(() => notifyNotificationsChanged())
+        .catch(() => {});
+    }
+    if (notification.link) navigate(notification.link);
+  };
+
+  const handleMarkAllRead = async () => {
+    if (unreadCount === 0) return;
+    setMarkingAll(true);
+    try {
+      await notificationService.markAllRead();
+      const now = new Date().toISOString();
+      setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || now })));
+      setUnreadCount(0);
+      notifyNotificationsChanged();
+    } catch {
+      toast.error('Failed to mark notifications as read');
+    } finally {
+      setMarkingAll(false);
+    }
+  };
 
   return (
     <>
@@ -50,7 +87,9 @@ const notifications = [
               <h2>Notifications</h2>
               <p>Stay updated with your orders and shipments</p>
             </div>
-            <button className="thm-btn outline">Mark All Read</button>
+            <button className="thm-btn outline" onClick={handleMarkAllRead} disabled={markingAll || unreadCount === 0}>
+              {markingAll ? 'Marking...' : 'Mark All Read'}
+            </button>
           </div>
         </div>
       </div>
@@ -60,10 +99,23 @@ const notifications = [
           <div className="member-card">
             <div className="member-card-body">
               <div className="notifications-list">
+                {loading && 
+                
+                <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
+      <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+        <span className="visually-hidden">Loading...</span>
+      </div>
+    </div>
+                }
+                {!loading && notifications.length === 0 && (
+                  <div className="text-center py-4 text-black">You have no notifications yet</div>
+                )}
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
                     className={`notification-item ${notification.unread ? 'unread' : ''}`}
+                    onClick={() => handleOpen(notification)}
+                    style={notification.link ? { cursor: 'pointer' } : undefined}
                   >
                     <div className="d-flex align-items-start gap-3">
                       <div className="kpi-icon" style={{ background: `${notification.color}14`, color: notification.color }}>

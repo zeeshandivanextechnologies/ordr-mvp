@@ -82,20 +82,8 @@ export default function useGoogleSignIn(onSuccess) {
           }
 
           try {
-            const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-            });
-            if (!userInfoRes.ok) throw new Error('Could not read Google profile');
-            const userInfo = await userInfoRes.json();
-
-            const payload = {
-              googleId: userInfo.sub,
-              email: userInfo.email,
-              fullName: userInfo.name,
-              avatarUrl: userInfo.picture || null,
-            };
-
-            const result = await googleLoginRef.current(payload);
+            // Backend verifies this token with Google and reads the profile itself
+            const result = await googleLoginRef.current({ accessToken: tokenResponse.access_token });
             onSuccessRef.current?.(result);
           } catch (err) {
             toast.error(err.response?.data?.error || err.message || 'Google sign-in failed. Please try again.');

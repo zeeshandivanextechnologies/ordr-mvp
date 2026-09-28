@@ -12,6 +12,8 @@ export default function UploadPO() {
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Saved document whose AI extraction failed because the AI was busy (can be retried)
+  const [pendingDoc, setPendingDoc] = useState(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -49,6 +51,7 @@ export default function UploadPO() {
 
   const removeFile = () => {
     setFile(null);
+    setPendingDoc(null);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -77,13 +80,59 @@ export default function UploadPO() {
       setLoading(true);
       const formData = new FormData();
       formData.append('file', file);
-      await api.post('/orders/upload', formData, {
+      const { data } = await api.post('/orders/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success('PO uploaded successfully');
-      navigate('/app/orders');
+      handleResult(data);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to upload PO');
+      handleError(err, 'Failed to upload PO');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Shared by upload and "Try Again"
+  const handleResult = (data) => {
+    if (data?.extracted) {
+      setPendingDoc(null);
+      toast.success(
+        data.extractCount > 1
+          ? `${data.extractCount} orders found in this file. Review them in the AI Order Inbox.`
+          : 'PO uploaded successfully. Review it in the AI Order Inbox.'
+      );
+      if (data.skippedByPlanLimit > 0) {
+        toast.warning(`${data.skippedByPlanLimit} more order(s) in this file were not added because your plan's AI extraction limit was reached. Upgrade in Billing to add them.`);
+      }
+      navigate('/app/ai-inbox');
+    } else if (data?.aiBusy) {
+      // File is saved; stay here so the user can retry without uploading again
+      setPendingDoc(data.document);
+      toast.warning('PO saved, but the AI service is busy right now. Click "Try Again" in a minute.');
+    } else {
+      setPendingDoc(null);
+      toast.warning('PO saved, but order details could not be read from this file. Please add the order manually.');
+    }
+  };
+
+  const handleError = (err, fallback) => {
+    const data = err.response?.data;
+    if (err.response?.status === 409 && data?.existingExtractId) {
+      // Same file uploaded before: open its existing AI Inbox entry
+      toast.info(data.message);
+      navigate(`/app/ai-inbox/${data.existingExtractId}/review`);
+      return;
+    }
+    toast.error(data?.message || fallback);
+  };
+
+  const handleRetry = async () => {
+    if (!pendingDoc) return;
+    try {
+      setLoading(true);
+      const { data } = await api.post(`/orders/documents/${pendingDoc.id}/reprocess`);
+      handleResult(data);
+    } catch (err) {
+      handleError(err, 'Failed to process the document');
     } finally {
       setLoading(false);
     }
@@ -160,9 +209,15 @@ export default function UploadPO() {
               </div>
 
               <div className="text-end mt-3">
-                <button className="thm-btn" onClick={handleUpload} disabled={loading}>
-                  {loading ? 'Uploading...' : 'Upload Document'}
-                </button>
+                {pendingDoc ? (
+                  <button className="thm-btn" onClick={handleRetry} disabled={loading}>
+                    {loading ? 'Processing...' : 'Try Again'}
+                  </button>
+                ) : (
+                  <button className="thm-btn" onClick={handleUpload} disabled={loading}>
+                    {loading ? 'Uploading...' : 'Upload Document'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

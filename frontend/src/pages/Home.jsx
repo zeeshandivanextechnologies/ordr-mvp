@@ -171,15 +171,15 @@ export default function Home() {
             <a href="#faq" className="nav-link-custom">FAQ</a>
           </div>
           <div className="d-flex gap-3">
-            {loading ? null : user ? (
-              <Link to="/app/dashboard" className="thm-btn">Dashboard</Link>
-            ) : (
-              <>
-                <Link to="/login" className="thm-btn outline  ">Login</Link>
-                <Link to="/signup" className="thm-btn ">Get Started</Link>
-              </>
-            )}
-          </div>
+  {user ? (
+    <Link to="/app/dashboard" className="thm-btn">Dashboard</Link>
+  ) : (
+    <>
+      <Link to="/login" className="thm-btn outline">Login</Link>
+      <Link to="/signup" className="thm-btn">Get Started</Link>
+    </>
+  )}
+</div>
         </div>
       </nav>
 

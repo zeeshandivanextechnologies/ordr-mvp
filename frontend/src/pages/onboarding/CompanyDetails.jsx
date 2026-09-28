@@ -65,7 +65,8 @@ export default function CompanyDetails() {
         email: user?.email || '',
         phone,
         designation,
-        gstNumber,
+        // The API field is gst_number (camelCase was silently ignored before)
+        gst_number: gstNumber,
       });
       await companyService.updateCompany({
         name: companyName,

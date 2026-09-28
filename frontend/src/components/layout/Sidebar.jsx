@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings } from 'react-icons/fi';
+import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings, FiBarChart2 } from 'react-icons/fi';
 import { useAuth } from '../AuthProvider';
 import '../../styles/member.css';
 import { MdLogout } from 'react-icons/md';
@@ -19,6 +19,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { path: '/app/integrations', label: 'Integrations', icon: <FiLink /> },
     { path: '/app/notifications', label: 'Notifications', icon: <FiBell /> },
     { path: '/app/alerts', label: 'Alerts', icon: <FiAlertTriangle /> },
+    { path: '/app/reports', label: 'Reports', icon: <FiBarChart2 /> },
     { path: '/app/settings', label: 'Settings', icon: <FiSettings /> },
   ];
 

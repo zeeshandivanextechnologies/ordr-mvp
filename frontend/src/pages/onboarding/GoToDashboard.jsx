@@ -68,7 +68,7 @@ export default function GoToDashboard() {
                 <p className="onboarding-desc">
                   You're ready to start tracking your orders. Your workspace {user && user.company_name ? `for ${user.company_name} ` : ''}is set up and ready to go.
                 </p>
-                <Link to="/" className="thm-lg-btn d-inline-block">Go to Dashboard</Link>
+                <Link to="/app/dashboard" className="thm-lg-btn d-inline-block">Go to Dashboard</Link>
               </div>
             </div>
           </div>

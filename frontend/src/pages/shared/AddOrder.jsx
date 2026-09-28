@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { fetchCountries, fetchStates, fetchCities } from '../../services/locationService';
 import { fetchCurrencies } from '../../services/currencyService';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../components/AuthProvider';
 import '../../styles/member.css';
 
 export default function AddOrder() {
@@ -64,6 +65,15 @@ export default function AddOrder() {
       mounted = false;
     };
   }, []);
+
+  // Editing orders is admin-only; members can still add new orders here
+  const { role } = useAuth();
+  useEffect(() => {
+    if (editingId && role && role !== 'admin') {
+      toast.error('Only admins can edit orders');
+      navigate('/app/orders', { replace: true });
+    }
+  }, [editingId, role, navigate]);
 
   useEffect(() => {
     if (!editingId) return;

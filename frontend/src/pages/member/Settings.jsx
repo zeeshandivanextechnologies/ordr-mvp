@@ -183,6 +183,8 @@ export default function MemberSettings() {
     shipment_alerts: true,
     ai_order_detection: false,
     delivery_reminders: false,
+    delay_alerts: true,
+    stale_alerts: true,
   });
   const [notifLoaded, setNotifLoaded] = useState(false);
   const [notifLoading, setNotifLoading] = useState(true);
@@ -200,6 +202,8 @@ export default function MemberSettings() {
           shipment_alerts: p.shipment_alerts ?? true,
           ai_order_detection: p.ai_order_detection ?? false,
           delivery_reminders: p.delivery_reminders ?? false,
+          delay_alerts: p.delay_alerts ?? true,
+          stale_alerts: p.stale_alerts ?? true,
         });
         setNotifLoaded(true);
       } catch {
@@ -217,8 +221,10 @@ export default function MemberSettings() {
   const notificationLabels = {
     email_notifications: 'Email notifications',
     shipment_alerts: 'Shipment alerts',
-    ai_order_detection: 'AI order detection',
-    delivery_reminders: 'Delivery reminders',
+    ai_order_detection: 'New order detection',
+    delivery_reminders: 'Delivery alerts',
+    delay_alerts: 'Delay alerts',
+    stale_alerts: 'Stale order alerts',
   };
 
   const handleNotificationsChange = async (field, value) => {
@@ -461,10 +467,11 @@ export default function MemberSettings() {
                 notifLoading ? <TabLoader /> :
                 <div className="row">
                   {[
-                    { key: 'email_notifications', label: 'Email Notifications', desc: 'Receive order updates via email' },
-                    { key: 'shipment_alerts', label: 'Shipment Alerts', desc: 'Get notified when shipment status changes' },
-                    { key: 'ai_order_detection', label: 'AI Order Detection', desc: 'Notify when new order detected from email' },
-                    { key: 'delivery_reminders', label: 'Delivery Reminders', desc: 'Reminder before delivery due date' },
+                    { key: 'email_notifications', label: 'Email Notifications', desc: 'Also send the alerts below to my email (in-app notifications are always shown)' },
+                    { key: 'ai_order_detection', label: 'New Order Detection', desc: 'When a new order is detected from email or an upload' },
+                    { key: 'delivery_reminders', label: 'Delivery Alerts', desc: 'Delivery due soon, shipment delivered and partial balance pending' },
+                    { key: 'delay_alerts', label: 'Delay Alerts', desc: 'When an order is overdue or a shipment is delayed' },
+                    { key: 'stale_alerts', label: 'Stale Order Alerts', desc: 'When an order has had no update for several days' },
                   ].map((item, idx) => (
                     <div className="col-md-6 mb-3" key={idx}>
                       <div className="details-box">
@@ -501,8 +508,11 @@ export default function MemberSettings() {
                         </div>
                         {gmailStatus.connected ? (
                           <span className="status-badge dispatched">Connected</span>
-                        ) : (
+                        ) : role === 'admin' ? (
                           <button className="thm-btn outline" onClick={handleConnectGmail} disabled={connectingGmail}>{connectingGmail ? 'Connecting...' : 'Connect'}</button>
+                        ) : (
+                          // Gmail integration is managed by admins only
+                          <span className="status-badge">Not Connected</span>
                         )}
                       </div>
                     </div>

@@ -23,6 +23,8 @@ export function ProtectedRoute({ children }) {
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Where the /login and /signup guards should send the user right after Google sign-in
+  const [authRedirect, setAuthRedirect] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -43,6 +45,7 @@ export default function AuthProvider({ children }) {
     const data = await authService.login({ email, password });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    setAuthRedirect(null);
     setUser(data.user);
     return data;
   };
@@ -51,6 +54,7 @@ export default function AuthProvider({ children }) {
     const data = await authService.signup({ full_name, email, password });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    setAuthRedirect(null);
     setUser(data.user);
     return data;
   };
@@ -67,6 +71,8 @@ export default function AuthProvider({ children }) {
     const result = await authService.googleCallback(data);
     localStorage.setItem('token', result.token);
     localStorage.setItem('user', JSON.stringify(result.user));
+    // Set together with user so the route guard redirects new users to onboarding
+    setAuthRedirect(result.isNew ? '/onboarding/company' : '/app/dashboard');
     setUser(result.user);
     return result;
   };
@@ -87,6 +93,7 @@ export default function AuthProvider({ children }) {
     }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    setAuthRedirect(null);
     setUser(null);
     toast.success('Logged out successfully');
   };
@@ -94,7 +101,7 @@ export default function AuthProvider({ children }) {
   const role = user?.role || null;
 
   return (
-    <AuthContext.Provider value={{ user, role, login, signup, acceptInvite, googleLogin, updateUser, logout, loading }}>
+    <AuthContext.Provider value={{ user, role, login, signup, acceptInvite, googleLogin, updateUser, logout, loading, authRedirect }}>
       {children}
     </AuthContext.Provider>
   );

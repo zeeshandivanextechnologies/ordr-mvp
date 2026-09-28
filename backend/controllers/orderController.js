@@ -1,11 +1,10 @@
 import { getClient, query } from '../config/database.js';
 import path from 'path';
+import { logAudit } from '../utils/audit.js';
 import fs from 'fs';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
-const XLSX = require('xlsx');
+import { hasValidSignature, hashFile, processDocument } from '../services/documentProcessor.js';
+import { assertWithinLimit, getPlanContext, historyCondition, remainingQuota, sendPlanError } from '../services/planGuard.js';
+import { MANUAL_ORDER_STATUSES, STATUS_LABELS, normalizeStatus, recalculateOrder } from '../utils/orderStatus.js';
 
 const buildCleanItems = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -43,7 +42,7 @@ export const updateOrder = async (req, res, next) => {
     const { company_id: companyId, id: userId } = req.user;
     const { id } = req.params;
 
-    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND company_id = $2', [id, companyId]);
+    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL', [id, companyId]);
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -107,8 +106,8 @@ export const updateOrder = async (req, res, next) => {
     for (const item of cleanItems) {
       await client.query(
         `INSERT INTO order_items (
-           order_id, company_id, product, sku, description, quantity, unit, unit_price, total
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+           order_id, company_id, product, sku, description, quantity, unit, unit_price, total, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())`,
         [
           id,
           companyId,
@@ -130,8 +129,13 @@ export const updateOrder = async (req, res, next) => {
       [id, companyId, updatedOrder.status || 'Received', 'Order details updated', userId]
     );
 
+    // Items were re-created, so restore dispatched/delivered quantities from shipments
+    const recalculatedStatus = await recalculateOrder(client, id, companyId, userId);
+    if (recalculatedStatus) updatedOrder.status = recalculatedStatus;
+
     await client.query('COMMIT');
 
+    await logAudit(req, 'order.edited', { entityType: 'order', entityId: id, details: { po_number: updatedOrder.po_number } });
     res.json({ message: 'Order updated successfully', order: updatedOrder });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -144,21 +148,101 @@ export const updateOrder = async (req, res, next) => {
   }
 };
 
+// Manual status change (Received/Confirmed/Processing/Ready for Dispatch/Cancelled).
+// Once active shipments exist, the status is derived from them instead.
+export const updateOrderStatus = async (req, res, next) => {
+  const client = await getClient();
+  try {
+    const { company_id: companyId, id: userId } = req.user;
+    const { id } = req.params;
+    const status = normalizeStatus(req.body?.status);
+
+    if (!MANUAL_ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid order status' });
+    }
+
+    await client.query('BEGIN');
+
+    const orderResult = await client.query(
+      'SELECT id, status FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL FOR UPDATE',
+      [id, companyId]
+    );
+    if (orderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const currentStatus = normalizeStatus(orderResult.rows[0].status);
+    if (currentStatus === status) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `Order is already ${STATUS_LABELS[status]}` });
+    }
+    if (currentStatus === 'cancelled') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Cancelled orders cannot be updated' });
+    }
+
+    const activeShipments = await client.query(
+      `SELECT COUNT(*)::int AS count FROM shipments
+       WHERE order_id = $1 AND LOWER(COALESCE(status, '')) <> 'cancelled'`,
+      [id]
+    );
+    if (activeShipments.rows[0].count > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'This order has shipments, so its status is updated from shipment status. Cancel the shipments first.',
+      });
+    }
+
+    const updated = await client.query(
+      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+
+    await client.query(
+      `INSERT INTO tracking_events (order_id, company_id, status, description, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, clock_timestamp())`,
+      [id, companyId, status, `Order status changed to ${STATUS_LABELS[status]}`, userId]
+    );
+
+    await client.query('COMMIT');
+
+    await logAudit(req, 'order.status_changed', { entityType: 'order', entityId: id, details: { from: currentStatus, to: status } });
+    res.json({ message: 'Order status updated', order: updated.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
 export const deleteOrder = async (req, res, next) => {
   const client = await getClient();
   try {
-    const { company_id: companyId } = req.user;
+    const { company_id: companyId, id: userId, full_name: userName } = req.user;
     const { id } = req.params;
 
-    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND company_id = $2', [id, companyId]);
+    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL', [id, companyId]);
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    // Soft delete: the order is hidden everywhere, but its history, items, shipments
+    // and documents are kept (tracking history must never be deleted)
     await client.query('BEGIN');
-    await client.query('DELETE FROM orders WHERE id = $1', [id]);
+    await client.query(
+      'UPDATE orders SET deleted_at = NOW(), deleted_by = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3',
+      [userId, id, companyId]
+    );
+    await client.query(
+      `INSERT INTO tracking_events (order_id, company_id, status, description, created_by, created_at)
+       VALUES ($1, $2, 'deleted', $3, $4, clock_timestamp())`,
+      [id, companyId, `Order deleted${userName ? ` by ${userName}` : ''}`, userId]
+    );
     await client.query('COMMIT');
 
+    await logAudit(req, 'order.deleted', { entityType: 'order', entityId: id });
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -178,6 +262,7 @@ export const createShipment = async (req, res, next) => {
       shipmentNumber,
       quantity,
       items,
+      lineItems,
       transporter,
       lrNumber,
       awbNumber,
@@ -193,17 +278,82 @@ export const createShipment = async (req, res, next) => {
       return res.status(400).json({ message: 'Shipment Number is required' });
     }
 
+    // Per-item quantities ({ orderItemId, quantity }) or, for single-item orders, one total quantity
+    const perItem = Array.isArray(lineItems)
+      ? lineItems
+          .map((li) => ({ orderItemId: li?.orderItemId, quantity: parseFloat(li?.quantity) }))
+          .filter((li) => li.orderItemId && (Number.isFinite(li.quantity) ? li.quantity !== 0 : false))
+      : null;
+
     const qtyToAllocate = quantity ? parseFloat(quantity) : 0;
-    if (!Number.isFinite(qtyToAllocate) || qtyToAllocate < 0) {
+    if (!perItem && (!Number.isFinite(qtyToAllocate) || qtyToAllocate < 0)) {
       return res.status(400).json({ message: 'Quantity must be a valid number' });
     }
+    if (perItem && perItem.some((li) => !(li.quantity > 0))) {
+      return res.status(400).json({ message: 'Item quantities must be greater than 0' });
+    }
+    if (perItem && perItem.length === 0) {
+      return res.status(400).json({ message: 'Enter a quantity for at least one item' });
+    }
 
-    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND company_id = $2', [orderId, companyId]);
+    const orderResult = await query('SELECT id, status FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL', [orderId, companyId]);
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    if (normalizeStatus(orderResult.rows[0].status) === 'cancelled') {
+      return res.status(400).json({ message: 'Cannot add a shipment to a cancelled order' });
+    }
 
     await client.query('BEGIN');
+
+    // Lock the order so two shipments cannot over-allocate the same quantity
+    await client.query('SELECT id FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+    const itemsResult = await client.query(
+      'SELECT id, product, unit, quantity, dispatched FROM order_items WHERE order_id = $1 ORDER BY created_at, id',
+      [orderId]
+    );
+    const orderItems = itemsResult.rows.map((i) => ({
+      ...i,
+      available: Math.max((parseFloat(i.quantity) || 0) - (parseFloat(i.dispatched) || 0), 0),
+    }));
+
+    // Work out how much of each order item goes in this shipment
+    const allocations = [];
+    if (perItem) {
+      for (const li of perItem) {
+        const item = orderItems.find((i) => i.id === li.orderItemId);
+        if (!item) {
+          throw Object.assign(new Error('One of the items does not belong to this order'), { status: 400 });
+        }
+        if (li.quantity > item.available + 0.000001) {
+          throw Object.assign(
+            new Error(`Only ${item.available.toLocaleString('en-IN')} ${item.unit || ''} of "${item.product}" is left to ship`.replace('  ', ' ')),
+            { status: 400 }
+          );
+        }
+        allocations.push({ item, quantity: li.quantity });
+      }
+    } else if (qtyToAllocate > 0) {
+      let remaining = qtyToAllocate;
+      for (const item of orderItems) {
+        if (remaining <= 0.000001) break;
+        if (item.available <= 0) continue;
+        const take = Math.min(remaining, item.available);
+        allocations.push({ item, quantity: take });
+        remaining -= take;
+      }
+      if (remaining > 0.000001) {
+        throw Object.assign(new Error('Shipment quantity exceeds remaining order quantity'), { status: 400 });
+      }
+    }
+
+    const totalQty = perItem ? allocations.reduce((sum, a) => sum + a.quantity, 0) : qtyToAllocate;
+    // Items text defaults to a summary of the per-item quantities
+    const itemsText = items && String(items).trim()
+      ? items
+      : perItem
+        ? allocations.map((a) => `${a.item.product} x ${a.quantity}${a.item.unit ? ' ' + a.item.unit : ''}`).join(', ')
+        : null;
 
     const result = await client.query(
       `INSERT INTO shipments (
@@ -217,8 +367,8 @@ export const createShipment = async (req, res, next) => {
         orderId,
         userId,
         shipmentNumber.trim(),
-        qtyToAllocate || null,
-        items || null,
+        totalQty || null,
+        itemsText || null,
         transporter || null,
         lrNumber || null,
         awbNumber || null,
@@ -231,28 +381,12 @@ export const createShipment = async (req, res, next) => {
       ]
     );
 
-    if (qtyToAllocate > 0) {
-      const itemsResult = await client.query(
-        'SELECT id, quantity, dispatched FROM order_items WHERE order_id = $1 ORDER BY created_at, id',
-        [orderId]
+    for (const { item, quantity: qty } of allocations) {
+      await client.query(
+        `INSERT INTO shipment_items (company_id, shipment_id, order_item_id, product, unit, quantity, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
+        [companyId, result.rows[0].id, item.id, item.product, item.unit, qty]
       );
-      let remaining = qtyToAllocate;
-      for (const item of itemsResult.rows) {
-        if (remaining <= 0.000001) break;
-        const itemQty = parseFloat(item.quantity) || 0;
-        const itemDispatched = parseFloat(item.dispatched) || 0;
-        const available = Math.max(itemQty - itemDispatched, 0);
-        if (available <= 0) continue;
-        const allocate = Math.min(remaining, available);
-        await client.query(
-          'UPDATE order_items SET dispatched = dispatched + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [allocate, item.id]
-        );
-        remaining -= allocate;
-      }
-      if (remaining > 0.000001) {
-        throw Object.assign(new Error('Shipment quantity exceeds remaining order quantity'), { status: 400 });
-      }
     }
 
     await client.query(
@@ -262,8 +396,12 @@ export const createShipment = async (req, res, next) => {
       [orderId, companyId, 'Dispatched', `Shipment ${shipmentNumber.trim()} created`, userId]
     );
 
+    // Dispatched/delivered quantities and the order status are derived from shipment items
+    await recalculateOrder(client, orderId, companyId, userId);
+
     await client.query('COMMIT');
 
+    await logAudit(req, 'shipment.created', { entityType: 'shipment', entityId: result.rows[0].id, details: { order_id: orderId, shipment_number: result.rows[0].shipment_number, quantity: result.rows[0].quantity } });
     res.status(201).json({ message: 'Shipment created successfully', shipment: result.rows[0] });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -279,15 +417,29 @@ export const createShipment = async (req, res, next) => {
 export const listOrders = async (req, res, next) => {
   try {
     const { company_id: companyId } = req.user;
+    // Plan history window: older completed orders are hidden (never deleted)
+    const planCtx = await getPlanContext(companyId);
 
     const result = await query(
       `SELECT o.*,
          (SELECT product FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.created_at, oi.id LIMIT 1) AS material,
          (SELECT unit FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.created_at, oi.id LIMIT 1) AS material_unit,
-         COALESCE((SELECT SUM(quantity) FROM order_items oi WHERE oi.order_id = o.id), 0) AS total_qty
+         COALESCE((SELECT SUM(quantity) FROM order_items oi WHERE oi.order_id = o.id), 0) AS total_qty,
+         (SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
+         (SELECT COUNT(DISTINCT LOWER(COALESCE(unit, '')))::int FROM order_items oi WHERE oi.order_id = o.id) AS unit_count,
+         -- All materials and shipment tracking numbers, for search
+         (SELECT string_agg(product, ' | ' ORDER BY created_at, id) FROM order_items oi WHERE oi.order_id = o.id) AS materials,
+         (SELECT string_agg(concat_ws(' ', s.shipment_number, s.lr_number, s.awb_number, s.gr_number), ' | ')
+            FROM shipments s WHERE s.order_id = o.id) AS tracking_numbers,
+         -- Latest activity on the order (edit, status change, shipment update or timeline event)
+         GREATEST(
+           o.updated_at,
+           COALESCE((SELECT MAX(s.updated_at) FROM shipments s WHERE s.order_id = o.id), o.updated_at),
+           COALESCE((SELECT MAX(te.created_at) FROM tracking_events te WHERE te.order_id = o.id), o.updated_at)
+         ) AS last_activity_at
        FROM orders o
-       WHERE o.company_id = $1
-       ORDER BY o.created_at DESC`,
+       WHERE o.company_id = $1 AND o.deleted_at IS NULL AND ${historyCondition(planCtx)}
+       ORDER BY last_activity_at DESC NULLS LAST, o.created_at DESC`,
       [companyId]
     );
 
@@ -302,7 +454,11 @@ export const getOrderDetail = async (req, res, next) => {
     const { company_id: companyId } = req.user;
     const { id } = req.params;
 
-    const orderResult = await query('SELECT * FROM orders WHERE id = $1 AND company_id = $2', [id, companyId]);
+    const planCtx = await getPlanContext(companyId);
+    const orderResult = await query(
+      `SELECT * FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL AND ${historyCondition(planCtx, 'orders')}`,
+      [id, companyId]
+    );
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -325,7 +481,10 @@ export const getOrderDetail = async (req, res, next) => {
     const shipmentsResult = await query(
       `SELECT id, shipment_number, quantity, items, transporter, lr_number, awb_number,
               gr_number, vehicle_number, origin, destination, dispatch_date,
-              expected_delivery_date, status, created_at
+              expected_delivery_date, status, created_at,
+              (SELECT COUNT(*)::int FROM shipment_items si WHERE si.shipment_id = shipments.id) AS item_count,
+              (SELECT string_agg(concat(si.product, ' x ', trim(to_char(si.quantity, 'FM999999999990.##')), CASE WHEN si.unit IS NOT NULL THEN ' ' || si.unit ELSE '' END), ', ' ORDER BY si.created_at, si.id)
+                 FROM shipment_items si WHERE si.shipment_id = shipments.id) AS item_summary
        FROM shipments WHERE order_id = $1 ORDER BY created_at DESC`,
       [id]
     );
@@ -343,7 +502,6 @@ export const getOrderDetail = async (req, res, next) => {
 };
 
 export const uploadPO = async (req, res, next) => {
-  const client = await getClient();
   try {
     const { company_id: companyId, id: userId } = req.user;
 
@@ -354,152 +512,112 @@ export const uploadPO = async (req, res, next) => {
     const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
     const fileType = ext === 'jpeg' ? 'jpg' : ext;
     const fileSize = req.file.size;
-
-    await client.query('BEGIN');
-
-    const result = await client.query(
-      `INSERT INTO po_documents (
-         company_id, uploaded_by, file_name, file_path, file_type, file_size, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, 'Pending')
-       RETURNING *`,
-      [companyId, userId, req.file.originalname, req.file.path, fileType, fileSize]
-    );
-
-    let extractedText = '';
-    let visionFile = null;
-    let visionMime = null;
     const filePath = req.file.path;
+    const discardUpload = () => fs.unlink(filePath, () => {});
 
-    if (ext === 'csv') {
-      try {
-        extractedText = fs.readFileSync(filePath, 'utf8');
-      } catch (err) {
-        console.error('CSV Read error:', err);
-        extractedText = 'Unable to read CSV file.';
-      }
-    } else if (ext === 'xlsx') {
-      try {
-        const workbook = XLSX.readFile(filePath);
-        const sheets = [];
-        for (const sheetName of workbook.SheetNames) {
-          const rows = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
-          sheets.push(`Sheet: ${sheetName}\n${rows}`);
-        }
-        extractedText = sheets.join('\n\n');
-      } catch (err) {
-        console.error('Excel Parsing error:', err);
-        extractedText = 'Unable to parse Excel file.';
-      }
-    } else if (ext === 'pdf') {
-      try {
-        const dataBuffer = fs.readFileSync(filePath);
-        const pdfData = await pdf(dataBuffer);
-        extractedText = pdfData.text;
-      } catch (err) {
-        console.error('PDF Parsing error:', err);
-        extractedText = '';
-      }
-      if (!extractedText || !extractedText.trim()) {
-        visionFile = fs.readFileSync(filePath);
-        visionMime = 'application/pdf';
-      }
-    } else if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
-      visionFile = fs.readFileSync(filePath);
-      visionMime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+    // The file's content must match its extension (not just its name)
+    if (!hasValidSignature(filePath, ext)) {
+      discardUpload();
+      return res.status(400).json({ message: `This file is not a valid ${ext.toUpperCase()} file` });
     }
 
-    const instructions = `You are an AI that extracts order details from a business document.
-First determine the document type: if it is a Purchase Order (this company is buying from a supplier) return order_type as "purchase"; if it is a Sales Order (this company is selling to a customer) return order_type as "sales".
-Extract the following information and return it strictly in valid JSON format without markdown formatting.
-JSON keys to return:
-{
-  "order_type": "purchase" or "sales",
-  "customer_name": "String (Name of the company/party)",
-  "po_number": "String (PO Number)",
-  "items": "String (Summary of items, e.g., 'Steel Pipes x 50 PCS')",
-  "approx_value": Number (Total approximate value),
-  "confidence": Number (1 to 100, how confident are you in this extraction)
-}
-If you cannot find a piece of information, make a reasonable guess based on the text or leave it as "Unknown".`;
-
-    const parts = [{ text: instructions }];
-    if (extractedText && extractedText.trim()) {
-      parts.push({ text: `Here is the text extracted from the document:\n${extractedText.substring(0, 8000)}` });
-    }
-    if (visionFile) {
-      parts.push({ inlineData: { mimeType: visionMime, data: visionFile.toString('base64') } });
+    // Plan limit: AI extractions
+    try {
+      await assertWithinLimit(companyId, 'aiExtractions');
+    } catch (planErr) {
+      discardUpload();
+      if (sendPlanError(res, planErr)) return;
+      throw planErr;
     }
 
-    const modelNames = [process.env.GEMINI_MODEL || 'gemini-3.6-flash', 'gemini-3.8-flash'];
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    let aiResponse = null;
-    let lastAIError = null;
-    for (const modelName of modelNames) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: 'application/json' } });
-        const resultAI = await model.generateContent(parts);
-        let textResponse = resultAI.response.text();
-        textResponse = textResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        aiResponse = JSON.parse(textResponse);
-        break;
-      } catch (aiErr) {
-        lastAIError = aiErr.message || String(aiErr);
-        console.error(`AI Extraction Error (${modelName}):`, aiErr.message);
-      }
+    // Same file uploaded before?
+    const fileHash = hashFile(filePath);
+    const previous = await query(
+      `SELECT d.*, (SELECT id FROM ai_order_extracts e WHERE e.po_document_id = d.id ORDER BY e.created_at LIMIT 1) AS extract_id
+       FROM po_documents d
+       WHERE d.company_id = $1 AND d.file_hash = $2
+       ORDER BY d.created_at DESC LIMIT 1`,
+      [companyId, fileHash]
+    );
+    let document = previous.rows[0] || null;
+    if (document && document.extract_id) {
+      discardUpload();
+      return res.status(409).json({
+        message: `This file was already uploaded on ${new Date(document.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}. Check the AI Order Inbox.`,
+        existingExtractId: document.extract_id,
+      });
     }
 
-    if (aiResponse && typeof aiResponse === 'object') {
-      const safeValue = parseFloat(String(aiResponse.approx_value || '0').replace(/,/g, '')) || 0;
-      const safeCustomer = String(aiResponse.customer_name || 'Unknown').substring(0, 250);
-      const safePO = String(aiResponse.po_number || 'Unknown').substring(0, 95);
-      const rawConfidence = parseInt(aiResponse.confidence, 10);
-      const safeConfidence = Number.isFinite(rawConfidence) ? Math.min(Math.max(rawConfidence, 0), 100) : 0;
-
-      const detectOrderType = (aiType, fileName) => {
-        const t = String(aiType || '').toLowerCase();
-        if (t.includes('purch')) return 'Purchase';
-        if (t.includes('sale')) return 'Sales';
-        const n = String(fileName || '').toLowerCase();
-        if (n.includes('purch') || n.includes('supplier')) return 'Purchase';
-        if (/(^|[^a-z])po([^a-z]|$)/.test(n)) return 'Purchase';
-        if (n.includes('sales') || /(^|[^a-z])so([^a-z]|$)/.test(n)) return 'Sales';
-        return 'Sales';
-      };
-
-      await client.query(
-        `INSERT INTO ai_order_extracts (
-           company_id, order_type, customer_name, po_number, items, approx_value,
-           email_date, confidence, status, attachment_name
-         ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7, $8, $9)`,
-        [
-          companyId,
-          detectOrderType(aiResponse.order_type, req.file.originalname),
-          safeCustomer,
-          safePO,
-          aiResponse.items || 'Unknown',
-          safeValue,
-          safeConfidence,
-          'New',
-          req.file.originalname
-        ]
-      );
+    if (document) {
+      // Earlier upload of the same file was never processed (e.g. AI was busy): reuse it
+      discardUpload();
     } else {
-      console.warn('AI extraction failed; document stays Pending. Last error:', lastAIError);
+      const docResult = await query(
+        `INSERT INTO po_documents (
+           company_id, uploaded_by, file_name, file_path, file_type, file_size, status, file_hash
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7)
+         RETURNING *`,
+        [companyId, userId, req.file.originalname, filePath, fileType, fileSize, fileHash]
+      );
+      document = docResult.rows[0];
     }
 
-    await client.query('COMMIT');
+    const maxExtracts = await remainingQuota(companyId, 'aiExtractions');
+    const result = await processDocument({ document, companyId, userId, maxExtracts });
 
     res.status(201).json({
       message: 'PO uploaded successfully',
-      document: result.rows[0],
-      extracted: !!aiResponse,
+      document,
+      extracted: result.created > 0,
+      extractCount: result.created,
+      // true when the AI service was overloaded; the file is saved and can be processed again
+      aiBusy: result.created === 0 && result.aiBusy,
+      // orders left out because the plan's AI extraction limit was reached
+      skippedByPlanLimit: result.skippedByPlanLimit || 0,
     });
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
     next(error);
-  } finally {
-    client.release();
+  }
+};
+
+// Runs extraction again for an uploaded document that produced no AI detection
+// (e.g. the AI service was busy during upload)
+export const reprocessDocument = async (req, res, next) => {
+  try {
+    const { company_id: companyId, id: userId } = req.user;
+    const { rows } = await query(
+      `SELECT d.*, EXISTS (SELECT 1 FROM ai_order_extracts e WHERE e.po_document_id = d.id) AS has_extract
+       FROM po_documents d WHERE d.id = $1 AND d.company_id = $2`,
+      [req.params.id, companyId]
+    );
+    const document = rows[0];
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+    if (document.has_extract) {
+      return res.status(400).json({ message: 'This document was already processed. Check the AI Order Inbox.' });
+    }
+    if (!fs.existsSync(document.file_path)) {
+      return res.status(404).json({ message: 'File is no longer available. Please upload it again.' });
+    }
+    try {
+      await assertWithinLimit(companyId, 'aiExtractions');
+    } catch (planErr) {
+      if (sendPlanError(res, planErr)) return;
+      throw planErr;
+    }
+
+    const maxExtracts = await remainingQuota(companyId, 'aiExtractions');
+    const result = await processDocument({ document, companyId, userId, maxExtracts });
+    res.json({
+      message: result.created > 0 ? 'Document processed' : 'Could not read order details',
+      document,
+      extracted: result.created > 0,
+      extractCount: result.created,
+      aiBusy: result.created === 0 && result.aiBusy,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -528,6 +646,14 @@ export const createOrder = async (req, res, next) => {
 
     if (!poNumber || !poNumber.trim()) {
       return res.status(400).json({ message: 'PO / Order Number is required' });
+    }
+
+    // Plan limit: orders per month (or during the trial)
+    try {
+      await assertWithinLimit(companyId, 'ordersPerMonth');
+    } catch (planErr) {
+      if (sendPlanError(res, planErr)) return;
+      throw planErr;
     }
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -593,8 +719,8 @@ export const createOrder = async (req, res, next) => {
     for (const item of cleanItems) {
       await client.query(
         `INSERT INTO order_items (
-           order_id, company_id, product, sku, description, quantity, unit, unit_price, total
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+           order_id, company_id, product, sku, description, quantity, unit, unit_price, total, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())`,
         [
           newOrder.id,
           companyId,
@@ -618,6 +744,7 @@ export const createOrder = async (req, res, next) => {
 
     await client.query('COMMIT');
 
+    await logAudit(req, 'order.created', { entityType: 'order', entityId: newOrder.id, details: { po_number: newOrder.po_number, source: 'Manual' } });
     res.status(201).json({ message: 'Order created successfully', order: newOrder });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

@@ -79,7 +79,20 @@ export const sendOtpEmail = async (to, otp) => {
   }
 };
 
-function teamInviteTemplate(inviterName, companyName, role, inviteLink) {
+// Escapes user-provided text (names) before it is placed inside email HTML
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+function teamInviteTemplate(rawInviterName, rawCompanyName, rawRole, rawInviteLink) {
+  const inviterName = escapeHtml(rawInviterName);
+  const companyName = escapeHtml(rawCompanyName);
+  const role = escapeHtml(rawRole);
+  const inviteLink = escapeHtml(rawInviteLink);
   return `<!DOCTYPE html>
   <html>
   <head><meta charset="utf-8"></head>
@@ -119,6 +132,47 @@ export const sendTeamInviteEmail = async (to, inviterName, companyName, role, in
     return true;
   } catch (error) {
     console.error("Invite email send error:", error.message);
+    return false;
+  }
+};
+
+// Module 24 optional email copy of an in-app notification
+function notificationTemplate(title, message, link) {
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+  const safeLink = escapeHtml(link);
+  return `<!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"></head>
+  <body style="font-family:Segoe UI,Tahoma,sans-serif;background:#f4f4f4;margin:0;padding:20px;">
+  <div style="max-width:500px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+  <div style="background:linear-gradient(135deg,#201d6a,#3d35a0);padding:15px 30px;text-align:center;"><h1 style="color:#fff;margin:0;font-size:28px;letter-spacing:2px;">ORDR</h1></div>
+  <div style="padding:20px 30px;">
+    <h2 style="color:#000;font-size:20px;margin:0 0 10px;">${safeTitle}</h2>
+    <p style="color:#444;font-size:15px;margin:0 0 20px;">${safeMessage}</p>
+    ${link ? `<a href="${safeLink}" style="background:#201d6a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;">Open in ORDR</a>` : ''}
+  </div>
+  <div style="padding:12px 30px;background:#f8f9fa;text-align:center;font-size:12px;color:#999;">You can turn these emails off in Settings &rarr; Notifications.</div>
+  </div>
+  </body>
+  </html>`;
+}
+
+export const sendNotificationEmail = async (to, title, message, link) => {
+  try {
+    const transport = await getTransporter();
+    const info = await transport.sendMail({
+      from: process.env.SMTP_FROM || "ORDR <noreply@ordr.app>",
+      to,
+      subject: `ORDR: ${title}`,
+      html: notificationTemplate(title, message, link),
+    });
+    if (!process.env.SMTP_USER) {
+      console.log("Notification email preview:", nodemailer.getTestMessageUrl(info));
+    }
+    return true;
+  } catch (error) {
+    console.error("Notification email send error:", error.message);
     return false;
   }
 };

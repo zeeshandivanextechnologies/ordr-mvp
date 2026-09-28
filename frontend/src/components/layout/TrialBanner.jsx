@@ -1,26 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { FiClock, FiX, FiZap, FiPackage, FiCpu } from 'react-icons/fi';
+import api from '../../services/api';
+import { useAuth } from '../AuthProvider';
+import { onBillingChanged } from '../../utils/billingEvents';
 import '../../styles/member.css';
+
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 export default function TrialBanner() {
   const [dismissed, setDismissed] = useState(false);
+  const [billing, setBilling] = useState(null);
+  const { role } = useAuth();
+  const { pathname } = useLocation();
 
+  const loadBilling = useCallback(() => {
+    api
+      .get('/billing')
+      .then((res) => setBilling(res.data))
+      .catch(() => {});
+  }, []);
+
+  // Reload on every page change so usage stays current after new orders / uploads
+  useEffect(() => {
+    loadBilling();
+  }, [pathname, loadBilling]);
+
+  // Reload right away after a payment or upgrade request on the Billing page
+  useEffect(() => onBillingChanged(loadBilling), [loadBilling]);
+
+  // Shown during the free trial, and whenever the trial / plan has ended (read-only)
+  if (dismissed || !billing) return null;
+  if (billing.subscription.plan !== 'trial' && billing.subscription.status !== 'expired') return null;
+  const isPaidPlan = billing.subscription.plan !== 'trial';
+
+  const sub = billing.subscription;
+  const expired = sub.status === 'expired';
   const trial = {
-    daysLeft: 9,
-    totalDays: 14,
-    startDate: '3 Sep 2026',
-    endDate: '17 Sep 2026',
-    ordersUsed: 47,
-    ordersLimit: 100,
-    aiUsed: 32,
-    aiLimit: 100,
+    daysLeft: sub.daysLeft ?? 0,
+    totalDays: sub.trialDays,
+    endDate: formatDate(sub.trialEndsAt),
+    ordersUsed: billing.usage.orders,
+    ordersLimit: billing.limits.ordersPerMonth,
+    aiUsed: billing.usage.aiExtractions,
+    aiLimit: billing.limits.aiExtractions,
   };
+  const barWidth = (used, limit) => `${limit ? Math.min((used / limit) * 100, 100) : 0}%`;
 
-  const daysPassed = trial.totalDays - trial.daysLeft;
-  const progressPct = Math.round((daysPassed / trial.totalDays) * 100);
-  const isUrgent = trial.daysLeft <= 3;
-
-  if (dismissed) return null;
+  const isUrgent = expired || trial.daysLeft <= 3;
 
   return (
     <div className={`trial-banner ${isUrgent ? 'urgent' : ''}`}>
@@ -33,14 +61,18 @@ export default function TrialBanner() {
         <div className="trial-banner-info">
           <div className="d-flex align-items-center gap-2">
             <span className="trial-banner-title">
-              Free Trial
+              {isPaidPlan ? `${sub.planName} Plan` : 'Free Trial'}
             </span>
             <span className={`trial-urgency-badge ${isUrgent ? 'urgent' : ''}`}>
-              {isUrgent ? `${trial.daysLeft} days left` : `${trial.daysLeft} days left`}
+              {expired ? (isPaidPlan ? 'Expired' : 'Ended') : `${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'} left`}
             </span>
           </div>
           <div className="trial-banner-sub">
-            Trial ends on {trial.endDate}
+            {isPaidPlan
+              ? `Plan expired on ${formatDate(sub.currentPeriodEnd)}. Your data is safe - renew to keep adding orders.`
+              : expired
+                ? `Trial ended on ${trial.endDate}. Your data is safe - choose a plan to keep adding orders.`
+                : `Trial ends on ${trial.endDate}`}
           </div>
         </div>
         </div>
@@ -53,7 +85,7 @@ export default function TrialBanner() {
             <div className="trial-stat-bar">
               <div
                 className="trial-stat-bar-fill"
-                style={{ width: `${(trial.ordersUsed / trial.ordersLimit) * 100}%` }}
+                style={{ width: barWidth(trial.ordersUsed, trial.ordersLimit) }}
               ></div>
             </div>
           </div>
@@ -63,16 +95,18 @@ export default function TrialBanner() {
             <div className="trial-stat-bar">
               <div
                 className="trial-stat-bar-fill"
-                style={{ width: `${(trial.aiUsed / trial.aiLimit) * 100}%` }}
+                style={{ width: barWidth(trial.aiUsed, trial.aiLimit) }}
               ></div>
             </div>
           </div>
         </div>
 
         <div className="trial-banner-actions">
-          <a href="/app/billing" className="thm-btn py-2 px-3" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
-            <FiZap /> Upgrade
-          </a>
+          {role === 'admin' && (
+            <Link to="/app/billing" className="thm-btn py-2 px-3" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+              <FiZap /> Upgrade
+            </Link>
+          )}
           <button className="trial-dismiss-btn" onClick={() => setDismissed(true)}>
             <FiX />
           </button>

@@ -28,6 +28,7 @@ import Tracking from './pages/shared/Tracking';
 import Integrations from './pages/shared/Integrations';
 import Notifications from './pages/shared/Notifications';
 import Alerts from './pages/shared/Alerts';
+import Reports from './pages/shared/Reports';
 
 // Admin-only pages
 import AdminSettings from './pages/admin/Settings';
@@ -39,15 +40,15 @@ import MemberSettings from './pages/member/Settings';
 import NotFound from './components/NotFound';
 
 function AppRoutes() {
-  const { user, role } = useAuth();
+  const { user, role, authRedirect } = useAuth();
 
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      
+
       {/* Auth Routes */}
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/app/dashboard" />} />
-      <Route path="/signup" element={!user ? <Signup /> : <Navigate to="/onboarding/company" />} />
+      <Route path="/login" element={!user ? <Login /> : <Navigate to={authRedirect || '/app/dashboard'} />} />
+      <Route path="/signup" element={!user ? <Signup /> : <Navigate to={authRedirect || '/onboarding/company'} />} />
       <Route path="/forgot-password" element={<ForgotPassword />} /> 
       <Route path="/reset-password" element={<ResetPassword />} /> 
       <Route path="/otp" element={<Otp />} /> 
@@ -75,6 +76,7 @@ function AppRoutes() {
         <Route path="integrations" element={<Integrations />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="alerts" element={<Alerts />} />
+        <Route path="reports" element={<Reports />} />
         
         {/* Settings - Role-based */}
         <Route path="settings" element={

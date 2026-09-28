@@ -4,12 +4,15 @@ import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2, Fi
 import { exportToCSV, printPage } from '../../utils/exportUtils';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../components/AuthProvider';
 import '../../styles/member.css';
 import { LuChevronDown } from 'react-icons/lu';
 
 const currencySymbols = { INR: '₹', USD: '$', AED: 'AED', SAR: 'SAR' };
 
 export default function Orders() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [activeTab, setActiveTab] = useState('sales');
   const [showDropdown, setShowDropdown] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -38,6 +41,21 @@ export default function Orders() {
     };
   }, []);
 
+  // Excel export is not part of the Basic plan (Growth and above, and the trial)
+  const [planId, setPlanId] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get('/billing')
+      .then((res) => {
+        if (mounted) setPlanId(res.data?.subscription?.plan || null);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -51,25 +69,34 @@ export default function Orders() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  // Every status the order status engine can set, so no order is hidden by the filter
   const filterOptions = [
     { value: 'all', label: 'All' },
     { value: 'received', label: 'Received' },
+    { value: 'confirmed', label: 'Confirmed' },
     { value: 'processing', label: 'Processing' },
     { value: 'ready-dispatch', label: 'Ready for Dispatch' },
+    { value: 'partially-dispatched', label: 'Partially Dispatched' },
     { value: 'dispatched', label: 'Dispatched' },
     { value: 'in-transit', label: 'In Transit' },
     { value: 'delayed', label: 'Delayed' },
+    { value: 'partially-delivered', label: 'Partially Delivered' },
     { value: 'delivered', label: 'Delivered' },
+    { value: 'cancelled', label: 'Cancelled' },
   ];
 
   const statusLabels = {
     received: 'Received',
+    confirmed: 'Confirmed',
     processing: 'Processing',
     'ready-dispatch': 'Ready for Dispatch',
+    'partially-dispatched': 'Partially Dispatched',
     dispatched: 'Dispatched',
     'in-transit': 'In Transit',
+    'partially-delivered': 'Partially Delivered',
     delayed: 'Delayed',
     delivered: 'Delivered',
+    cancelled: 'Cancelled',
   };
 
   const formatMoney = (value, currency) => {
@@ -85,14 +112,24 @@ export default function Orders() {
   };
 
   const displayOrders = orders.map((o) => {
-    const status = String(o.status || '').toLowerCase();
+    // Status slug, also for older values like "In Transit"
+    const status = String(o.status || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
     const qty = Number(o.total_qty) || 0;
+    const itemCount = Number(o.item_count) || 0;
+    // Quantities in different units cannot be added up
+    const mixedUnits = Number(o.unit_count) > 1;
     return {
       id: o.id,
-      customer: o.party_name,
-      po: o.po_number,
-      material: o.material || '—',
-      qty: qty > 0 ? `${qty.toLocaleString()}${o.material_unit ? ' ' + o.material_unit : ''}` : '—',
+      customer: o.party_name || '—',
+      po: o.po_number || '—',
+      material: o.material ? `${o.material}${itemCount > 1 ? ` +${itemCount - 1} more` : ''}` : '—',
+      qty: mixedUnits
+        ? `${itemCount} items`
+        : qty > 0 ? `${qty.toLocaleString()}${o.material_unit ? ' ' + o.material_unit : ''}` : '—',
+      searchText: [o.party_name, o.po_number, o.materials, o.tracking_numbers]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase(),
       value: formatMoney(o.total_value, o.currency),
       due: formatDate(o.required_delivery_date),
       status,
@@ -107,14 +144,16 @@ export default function Orders() {
     const matchesTab = activeTab === 'sales' || activeTab === 'purchase' ? o.type === activeTab : true;
     const matchesFilter = filter === 'all' || o.status === filter;
     const term = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      !term ||
-      o.customer.toLowerCase().includes(term) ||
-      o.po.toLowerCase().includes(term);
+    // Customer/Supplier, PO, any material, and shipment / LR / AWB / GR numbers
+    const matchesSearch = !term || o.searchText.includes(term);
     return matchesTab && matchesFilter && matchesSearch;
   });
 
   const handleExport = () => {
+    if (planId === 'basic') {
+      toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
+      return;
+    }
     const data = filteredOrders.map((o, i) => ({
       'Sr No.': i + 1,
       'Customer/Supplier': o.customer,
@@ -211,7 +250,7 @@ export default function Orders() {
         <div className='col-lg-12'>
           <div className="search-filter-bar">
         <div className="custom-frm-bx flex-grow-1">
-          <input type="text" className='form-control' placeholder="Search by customer, PO number..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" className='form-control' placeholder="Search by customer, PO, material, LR / tracking no..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <div className='custom-frm-bx'>
           <select
@@ -293,12 +332,16 @@ export default function Orders() {
                           <Link to={`/app/orders/${order.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                             <FiEye /> View Details
                           </Link>
-                          <Link to="/app/orders/add" state={{ editId: order.id }} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
-                            <FiEdit2 /> Edit
-                          </Link>
-                          <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.po); }}>
-                            <FiTrash2 /> Delete
-                          </Link>
+                          {isAdmin && (
+                            <>
+                              <Link to="/app/orders/add" state={{ editId: order.id }} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                                <FiEdit2 /> Edit
+                              </Link>
+                              <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.po); }}>
+                                <FiTrash2 /> Delete
+                              </Link>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

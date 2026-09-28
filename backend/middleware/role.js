@@ -5,7 +5,9 @@ export const requireRole = (...roles) => {
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      // Both keys: some pages read .error, others read .message
+      const msg = 'You do not have permission to perform this action';
+      return res.status(403).json({ error: msg, message: msg });
     }
 
     next();

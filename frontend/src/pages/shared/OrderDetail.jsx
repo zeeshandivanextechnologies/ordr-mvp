@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FiArrowLeft, FiDownload, FiFile, FiShoppingBag, FiTruck, FiCheckCircle, FiBox, FiPlus } from 'react-icons/fi';
 import api from '../../services/api';
+import documentService from '../../services/documentService';
 import { toast } from 'react-toastify';
 import '../../styles/member.css';
 
@@ -21,31 +22,78 @@ const statusLabels = {
   cancelled: 'Cancelled',
 };
 
+// Statuses a user can set on the order directly (before any shipment exists)
+const manualOrderStatuses = ['received', 'confirmed', 'processing', 'ready-dispatch', 'cancelled'];
+
+// Shipment status actions (same as the Shipment Detail page)
+const shipmentStatusOptions = [
+  { value: 'ready-dispatch', label: 'Mark Ready' },
+  { value: 'dispatched', label: 'Mark Dispatched' },
+  { value: 'in-transit', label: 'Mark In Transit' },
+  { value: 'delivered', label: 'Mark Delivered' },
+  { value: 'delayed', label: 'Mark Delayed' },
+  { value: 'cancelled', label: 'Cancel Shipment' },
+];
+
+const toStatusKey = (value) => {
+  const slug = String(value || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return slug === 'ready' || slug === 'ready-for-dispatch' ? 'ready-dispatch' : slug;
+};
+
 export default function OrderDetail() {
   const [activeTab, setActiveTab] = useState('overview');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statusUpdating, setStatusUpdating] = useState(false);
   const { id } = useParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    let mounted = true;
-    api
-      .get(`/orders/${id}`)
-      .then((res) => {
-        if (mounted) setData(res.data);
-      })
-      .catch((err) => {
-        if (mounted) setError(err.response?.data?.message || 'Failed to load order');
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
+  const loadOrder = useCallback(async () => {
+    try {
+      const res = await api.get(`/orders/${id}`);
+      setData(res.data);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load order');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    loadOrder();
+  }, [loadOrder]);
+
+  const handleOrderStatusChange = async (status) => {
+    if (!status || statusUpdating) return;
+    if (status === 'cancelled' && !window.confirm('Cancel this order? This cannot be undone.')) return;
+    setStatusUpdating(true);
+    try {
+      await api.patch(`/orders/${id}/status`, { status });
+      toast.success(`Order marked ${statusLabels[status]}`);
+      await loadOrder();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
+  const handleShipmentStatusChange = async (shipment, status) => {
+    if (!status || statusUpdating) return;
+    if (status === 'cancelled' && !window.confirm(`Cancel shipment ${shipment.shipment_number}? Its quantity will be released back to the order.`)) return;
+    setStatusUpdating(true);
+    try {
+      await api.post(`/shipments/${shipment.id}/status`, { status });
+      toast.success(`Shipment marked ${statusLabels[status]}`);
+      await loadOrder();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update shipment status');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
 
   const formatMoney = (value, currency) => {
     const sym = currencySymbols[currency] || currency || '';
@@ -99,8 +147,12 @@ export default function OrderDetail() {
 
   const showQty = (n) => `${qty(n)}${orderUnit ? ' ' + orderUnit : ''}`;
 
-  const statusKey = order ? String(order.status || '').toLowerCase() : '';
+  const statusKey = order ? toStatusKey(order.status) : '';
   const statusLabel = statusLabels[statusKey] || order?.status || '';
+  const isOrderCancelled = statusKey === 'cancelled';
+  const hasActiveShipments = shipments.some((s) => toStatusKey(s.status) !== 'cancelled');
+  // Once shipments exist the order status is calculated from them
+  const canUpdateOrderStatus = !isOrderCancelled && !hasActiveShipments;
   const orderTypeLabel = order?.order_type === 'purchase' ? 'Purchase Order' : 'Sales Order';
 
   const kpis = [
@@ -134,9 +186,27 @@ export default function OrderDetail() {
               </div>
             </div>
             {!loading && order && (
-              <div className="d-flex align-items-center gap-3">
+              <div className="d-flex align-items-center gap-3 flex-wrap">
                 <span className="order-value">{formatMoney(order.total_value, order.currency)}</span>
                 <span className={`status-badge ${statusKey}`}>{statusLabel}</span>
+                {canUpdateOrderStatus && (
+                 <div className='custom-frm-bx mb-0'>
+                   <select
+                    className="form-select form-select-sm w-auto"
+                    value=""
+                    onChange={(e) => handleOrderStatusChange(e.target.value)}
+                    disabled={statusUpdating}
+                    aria-label="Update order status"
+                  >
+                    <option value="">{statusUpdating ? 'Updating...' : 'Update Status'}</option>
+                    {manualOrderStatuses
+                      .filter((s) => s !== statusKey)
+                      .map((s) => (
+                        <option key={s} value={s}>{s === 'cancelled' ? 'Cancel Order' : statusLabels[s]}</option>
+                      ))}
+                  </select>
+                 </div>
+                )}
               </div>
             )}
           </div>
@@ -182,7 +252,7 @@ export default function OrderDetail() {
               {loading && <div className="text-center py-4">Loading order details...</div>}
 
               {!loading && error && (
-                <div className="alert alert-danger mb-0">{error}</div>
+                <div className="py-5"><p className='text-center mb-0 fz-16'>{error}</p></div>
               )}
 
               {!loading && !error && order && activeTab === 'overview' && (
@@ -239,12 +309,14 @@ export default function OrderDetail() {
                 <div>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <h6 className="fz-20 mb-0">Shipments</h6>
-                    <Link to={`/app/orders/${order.id}/shipments/add`} className="thm-btn p-2 fz-14">
-                      <FiPlus /> Add Shipment
-                    </Link>
+                    {!isOrderCancelled && (
+                      <Link to={`/app/orders/${order.id}/shipments/add`} className="thm-btn p-2 fz-14">
+                        <FiPlus /> Add Shipment
+                      </Link>
+                    )}
                   </div>
                   {shipments.map((s, idx) => {
-                    const shipStatus = String(s.status || '').toLowerCase();
+                    const shipStatus = toStatusKey(s.status);
                     return (
                       <div className="shipment-card" key={idx}>
                         <div className="shipment-header">
@@ -253,9 +325,13 @@ export default function OrderDetail() {
                               <FiTruck />
                             </div>
                             <div>
-                              <span className="shipment-id">{s.shipment_number}</span>
+                              <Link to={`/app/shipments/${s.id}`} className="shipment-id">{s.shipment_number}</Link>
                               <div className="shipment-meta">
-                                <span>Qty: {s.quantity ? qty(s.quantity) + ' ' + (orderUnit || '') : '—'}</span>
+                                <span>
+                                  Qty: {s.item_count > 1
+                                    ? s.item_summary
+                                    : s.quantity ? qty(s.quantity) + ' ' + (orderUnit || '') : '—'}
+                                </span>
                                 <span>Transporter: {s.transporter || '—'}</span>
                                 <span>LR: {s.lr_number || '—'}</span>
                                 <span>Date: {formatDate(s.dispatch_date)}</span>
@@ -266,9 +342,29 @@ export default function OrderDetail() {
                               </div>
                             </div>
                           </div>
-                          <span className={`status-badge ${shipStatus}`}>
-                            {statusLabels[shipStatus] || s.status}
-                          </span>
+                          <div className="d-flex flex-column align-items-end gap-2">
+                            <span className={`status-badge ${shipStatus}`}>
+                              {statusLabels[shipStatus] || s.status}
+                            </span>
+                            {shipStatus !== 'cancelled' && !isOrderCancelled && (
+                             <div className='custom-frm-bx mb-0'>
+                               <select
+                                className="form-select form-select-sm w-auto"
+                                value=""
+                                onChange={(e) => handleShipmentStatusChange(s, e.target.value)}
+                                disabled={statusUpdating}
+                                aria-label={`Update status of shipment ${s.shipment_number}`}
+                              >
+                                <option value="">{statusUpdating ? 'Updating...' : 'Update Status'}</option>
+                                {shipmentStatusOptions
+                                  .filter((opt) => opt.value !== shipStatus)
+                                  .map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                              </select>
+                             </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -304,7 +400,12 @@ export default function OrderDetail() {
                           <div className="document-meta">{(doc.file_type || '').toUpperCase()} • {formatSize(doc.file_size)}</div>
                         </div>
                       </div>
-                      <button className="thm-btn outline p-2 fz-14" onClick={() => toast.info('Document download coming soon')}><FiDownload /> Download</button>
+                      <button
+                        className="thm-btn outline p-2 fz-14"
+                        onClick={() => documentService.download(doc.id, doc.file_name).catch(() => toast.error('Failed to download document'))}
+                      >
+                        <FiDownload /> Download
+                      </button>
                     </div>
                   ))}
                   {documents.length === 0 && (

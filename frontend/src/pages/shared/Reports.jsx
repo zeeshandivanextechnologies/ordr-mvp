@@ -1,0 +1,238 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { FiBarChart2, FiCheckCircle, FiClock, FiTruck, FiCpu, FiLock } from 'react-icons/fi';
+import api from '../../services/api';
+import { useAuth } from '../../components/AuthProvider';
+import '../../styles/member.css';
+
+const statusLabels = {
+  received: 'Received',
+  confirmed: 'Confirmed',
+  processing: 'Processing',
+  'ready-dispatch': 'Ready for Dispatch',
+  'partially-dispatched': 'Partially Dispatched',
+  dispatched: 'Dispatched',
+  'in-transit': 'In Transit',
+  'partially-delivered': 'Partially Delivered',
+  delayed: 'Delayed',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
+
+const money = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
+const monthLabel = (m) => {
+  const [y, mo] = String(m).split('-').map(Number);
+  return new Date(y, mo - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+};
+
+// Advanced reporting (Business / Pro plans)
+export default function Reports() {
+  const [months, setMonths] = useState(6);
+  const [data, setData] = useState(null);
+  const [locked, setLocked] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { role } = useAuth();
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api
+      .get('/reports', { params: { months } })
+      .then((res) => {
+        if (mounted) {
+          setData(res.data);
+          setLocked(null);
+        }
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        if (err.response?.status === 402) setLocked(err.response.data.message);
+        else toast.error('Failed to load reports');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [months]);
+
+  const totals = (data?.byMonth || []).reduce(
+    (acc, m) => ({
+      orders: acc.orders + m.salesOrders + m.purchaseOrders,
+      sales: acc.sales + m.salesValue,
+      purchase: acc.purchase + m.purchaseValue,
+    }),
+    { orders: 0, sales: 0, purchase: 0 }
+  );
+
+  const kpis = data
+    ? [
+        { label: 'Orders', value: totals.orders.toLocaleString('en-IN'), sub: `Last ${months} months`, icon: <FiBarChart2 />, color: '#2D4735' },
+        { label: 'On-time Delivery', value: data.delivery.onTimeRate === null ? '—' : `${data.delivery.onTimeRate}%`, sub: `${data.delivery.deliveredOrders} delivered orders`, icon: <FiCheckCircle />, color: '#2e7d32' },
+        { label: 'Avg. Delivery Time', value: data.delivery.avgDeliveryDays === null ? '—' : `${data.delivery.avgDeliveryDays} days`, sub: 'Order created to delivered', icon: <FiClock />, color: '#e65100' },
+        { label: 'Delayed Shipments', value: `${data.shipments.delayed}`, sub: `of ${data.shipments.total} shipments`, icon: <FiTruck />, color: '#c62828' },
+        { label: 'AI Detections Confirmed', value: data.ai.total ? `${Math.round((data.ai.confirmed / data.ai.total) * 100)}%` : '—', sub: `${data.ai.confirmed} of ${data.ai.total} (${data.ai.from_email} from email)`, icon: <FiCpu />, color: '#1565c0' },
+        { label: 'Sales / Purchase Value', value: money(totals.sales), sub: `Purchases ${money(totals.purchase)}`, icon: <FiBarChart2 />, color: '#0277bd' },
+      ]
+    : [];
+
+  return (
+    <>
+      <div className="row">
+        <div className="col-lg-12">
+          <div className="member-page-header">
+            <div>
+              <h2>Reports</h2>
+              <p>Order, delivery and AI performance for your business</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {!locked && (
+        <div className="row">
+          <div className="col-lg-12">
+            <div className="member-tabs">
+              {[3, 6, 12].map((m) => (
+                <button key={m} className={`tab-btn ${months === m ? 'active' : ''}`} onClick={() => setMonths(m)}>
+                  Last {m} months
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && <div className="text-center py-4 text-secondary">Loading reports...</div>}
+
+      {!loading && locked && (
+        <div className="row">
+          <div className="col-lg-12">
+            <div className="member-card">
+              <div className="member-empty-state">
+                <div className="empty-icon"><FiLock /></div>
+                <h4>Advanced reporting</h4>
+                <p>{locked}</p>
+                {role === 'admin' && <Link to="/app/billing" className="thm-btn mt-2">View Plans</Link>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && data && (
+        <>
+          <div className="row">
+            {kpis.map((kpi, idx) => (
+              <div className="col-lg-4 col-md-6 col-sm-12 mb-3" key={idx}>
+                <div className="kpi-card">
+                  <div className="d-flex justify-content-between align-items-start">
+                    <div className="kpi-label">{kpi.label}</div>
+                    <div className="kpi-icon" style={{ background: `${kpi.color}14`, color: kpi.color }}>{kpi.icon}</div>
+                  </div>
+                  <div className="kpi-value">{kpi.value}</div>
+                  <div className="kpi-sub">{kpi.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="row">
+            <div className="col-lg-12 mb-3">
+              <div className="member-card">
+                <div className="member-card-header"><h5>Orders by Month</h5></div>
+                <div className="table-responsive">
+                  <table className="member-table">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th>Sales Orders</th>
+                        <th>Sales Value</th>
+                        <th>Purchase Orders</th>
+                        <th>Purchase Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.byMonth.length === 0 && (
+                        <tr><td colSpan={5} className="text-center py-4 text-secondary">No orders in this period</td></tr>
+                      )}
+                      {data.byMonth.map((m) => (
+                        <tr key={m.month}>
+                          <td>{monthLabel(m.month)}</td>
+                          <td>{m.salesOrders}</td>
+                          <td>{money(m.salesValue)}</td>
+                          <td>{m.purchaseOrders}</td>
+                          <td>{money(m.purchaseValue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row">
+            {[
+              { title: 'Top Customers', rows: data.topCustomers },
+              { title: 'Top Suppliers', rows: data.topSuppliers },
+            ].map((block) => (
+              <div className="col-lg-6 mb-3" key={block.title}>
+                <div className="member-card h-100">
+                  <div className="member-card-header"><h5>{block.title}</h5></div>
+                  <div className="table-responsive">
+                    <table className="member-table">
+                      <thead>
+                        <tr><th>Name</th><th>Orders</th><th>Value</th></tr>
+                      </thead>
+                      <tbody>
+                        {block.rows.length === 0 && (
+                          <tr><td colSpan={3} className="text-center py-4 text-secondary">No data</td></tr>
+                        )}
+                        {block.rows.map((r) => (
+                          <tr key={r.name}>
+                            <td>{r.name}</td>
+                            <td>{r.orders}</td>
+                            <td>{money(r.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="row">
+            <div className="col-lg-12 mb-3">
+              <div className="member-card">
+                <div className="member-card-header"><h5>Orders by Status</h5></div>
+                <div className="table-responsive">
+                  <table className="member-table">
+                    <thead>
+                      <tr><th>Status</th><th>Orders</th></tr>
+                    </thead>
+                    <tbody>
+                      {data.byStatus.length === 0 && (
+                        <tr><td colSpan={2} className="text-center py-4 text-secondary">No orders in this period</td></tr>
+                      )}
+                      {data.byStatus.map((s) => (
+                        <tr key={s.status}>
+                          <td><span className={`status-badge ${s.status}`}>{statusLabels[s.status] || s.status}</span></td>
+                          <td>{s.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}

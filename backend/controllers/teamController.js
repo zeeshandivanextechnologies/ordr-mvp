@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { query, getClient } from '../config/database.js';
 import config from '../config/environment.js';
 import { sendTeamInviteEmail } from '../utils/emailService.js';
+import { logAudit } from '../utils/audit.js';
+import { assertWithinLimit, getPlanContext, pendingInvitationCount, remainingQuota } from '../services/planGuard.js';
 
 const generateToken = (userId) => {
   return jwt.sign({ userId }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
@@ -13,7 +15,8 @@ const setTokenCookie = (res, token) => {
   res.cookie('token', token, {
     httpOnly: true,
     secure: config.nodeEnv === 'production',
-    sameSite: 'lax',
+    // Production frontend may be on another domain: cross-site cookies need SameSite=None + Secure
+    sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
@@ -84,9 +87,23 @@ export const acceptTeamInvite = async (req, res) => {
     const { error, invite } = await findPendingInvite(req.params.token);
     if (error) return res.status(400).json({ error });
 
-    const existing = await query('SELECT id FROM users WHERE email = $1', [invite.email]);
-    if (existing.rows.length > 0) {
+    const existing = await query('SELECT id, company_id, removed_at FROM users WHERE email = $1', [invite.email]);
+    // A member who was removed from this same team can be invited back (their history is kept)
+    const rejoining = existing.rows[0] && existing.rows[0].removed_at && existing.rows[0].company_id === invite.company_id
+      ? existing.rows[0]
+      : null;
+    if (existing.rows.length > 0 && !rejoining) {
       return res.status(409).json({ error: 'An account with this email already exists. Please log in instead.' });
+    }
+
+    // The company's plan must still have a free user seat (and must not have expired)
+    try {
+      await assertWithinLimit(invite.company_id, 'users');
+    } catch (planErr) {
+      if (planErr.status === 402) {
+        return res.status(402).json({ error: 'This team has reached its user limit. Please ask your admin to upgrade the plan.' });
+      }
+      throw planErr;
     }
 
     const password_hash = await bcrypt.hash(password, 12);
@@ -97,12 +114,21 @@ export const acceptTeamInvite = async (req, res) => {
     try {
       await client.query('BEGIN');
 
-      const userResult = await client.query(
-        `INSERT INTO users (company_id, full_name, email, password_hash, role)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, company_id, full_name, email, role`,
-        [invite.company_id, full_name, invite.email, password_hash, inviteRole]
-      );
+      const userResult = rejoining
+        ? await client.query(
+            `UPDATE users
+             SET full_name = $1, password_hash = $2, role = $3, is_active = true,
+                 removed_at = NULL, removed_by = NULL, updated_at = NOW()
+             WHERE id = $4
+             RETURNING id, company_id, full_name, email, role`,
+            [full_name, password_hash, inviteRole, rejoining.id]
+          )
+        : await client.query(
+            `INSERT INTO users (company_id, full_name, email, password_hash, role)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, company_id, full_name, email, role`,
+            [invite.company_id, full_name, invite.email, password_hash, inviteRole]
+          );
       user = userResult.rows[0];
 
       await client.query(
@@ -156,6 +182,11 @@ export const inviteTeamMembers = async (req, res) => {
     }
     const companyName = companyResult.rows[0].name;
 
+    // Plan user limit: active users + pending invitations must stay within the plan
+    const planCtx = await getPlanContext(user.company_id);
+    let seatsLeft = (await remainingQuota(user.company_id, 'users', planCtx)) - (await pendingInvitationCount(user.company_id));
+    const userLimit = planCtx.plan.limits.users;
+
     const successfulInvites = [];
     const failedInvites = [];
 
@@ -171,10 +202,26 @@ export const inviteTeamMembers = async (req, res) => {
       const inviteRole = role === 'admin' ? 'admin' : 'member';
 
       // Check if user is already in the company
-      const existingUser = await query('SELECT id FROM users WHERE email = $1 AND company_id = $2', [cleanEmail, user.company_id]);
+      const existingUser = await query('SELECT id FROM users WHERE email = $1 AND company_id = $2 AND removed_at IS NULL', [cleanEmail, user.company_id]);
       if (existingUser.rows.length > 0) {
         failedInvites.push({ email: cleanEmail, reason: 'User is already in the company' });
         continue;
+      }
+
+      // Re-sending a still-pending invite does not take a new seat
+      const alreadyPending = (await query(
+        `SELECT 1 FROM team_invitations WHERE company_id = $1 AND email = $2 AND status = 'pending' AND expires_at > NOW()`,
+        [user.company_id, cleanEmail]
+      )).rows.length > 0;
+      if (!alreadyPending) {
+        if (seatsLeft <= 0) {
+          failedInvites.push({
+            email: cleanEmail,
+            reason: `Your ${planCtx.plan.name} plan allows ${userLimit} users. Upgrade your plan in Billing to invite more.`,
+          });
+          continue;
+        }
+        seatsLeft -= 1;
       }
 
       const token = crypto.randomBytes(32).toString('hex');
@@ -206,6 +253,13 @@ export const inviteTeamMembers = async (req, res) => {
       }
     }
 
+    if (successfulInvites.length > 0) {
+      await logAudit(req, 'team.members_invited', {
+        entityType: 'invitation',
+        details: { emails: successfulInvites.map((i) => i.email || i) },
+      });
+    }
+
     res.json({
       message: `Processed ${invites.length} invitations`,
       success: successfulInvites,
@@ -225,7 +279,7 @@ export const listTeamMembers = async (req, res) => {
     const membersResult = await query(
       `SELECT id, full_name, email, role, is_active, created_at
        FROM users
-       WHERE company_id = $1
+       WHERE company_id = $1 AND removed_at IS NULL
        ORDER BY created_at ASC`,
       [company_id]
     );
@@ -258,7 +312,7 @@ export const removeTeamMember = async (req, res) => {
     }
 
     const result = await query(
-      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2',
+      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2 AND removed_at IS NULL',
       [id, company_id]
     );
 
@@ -270,8 +324,13 @@ export const removeTeamMember = async (req, res) => {
       return res.status(400).json({ error: 'Cannot remove an admin member' });
     }
 
-    await query('DELETE FROM users WHERE id = $1', [id]);
+    // Soft remove: the account is disabled and hidden, but everything the member created stays
+    await query(
+      'UPDATE users SET is_active = false, removed_at = NOW(), removed_by = $1, updated_at = NOW() WHERE id = $2',
+      [currentUserId, id]
+    );
 
+    await logAudit(req, 'team.member_removed', { entityType: 'user', entityId: id });
     res.json({ message: 'Member removed successfully' });
   } catch (error) {
     console.error('Remove Team Member Error:', error);
@@ -317,7 +376,7 @@ export const updateMemberStatus = async (req, res) => {
     }
 
     const result = await query(
-      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2',
+      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2 AND removed_at IS NULL',
       [id, company_id]
     );
 
@@ -334,6 +393,7 @@ export const updateMemberStatus = async (req, res) => {
       [is_active, id]
     );
 
+    await logAudit(req, is_active ? 'team.member_activated' : 'team.member_deactivated', { entityType: 'user', entityId: id });
     res.json({ message: is_active ? 'Member activated' : 'Member deactivated' });
   } catch (error) {
     console.error('Update Member Status Error:', error);

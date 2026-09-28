@@ -1,8 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
-import { FiMenu, FiBell, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiChevronUp, FiBox, FiTruck, FiMail, FiClock, FiAlertCircle, FiPackage } from 'react-icons/fi';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { FiMenu, FiBell, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiChevronUp, FiBox, FiTruck } from 'react-icons/fi';
 import { IoIosNotifications } from 'react-icons/io';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
+import notificationService from '../../services/notificationService';
+import {
+  notificationStyle,
+  timeAgo,
+  notifyNotificationsChanged,
+  onNotificationsChanged,
+} from '../../utils/notificationDisplay';
+
+const NOTIFICATION_POLL_MS = 60 * 1000;
 
 export default function Header({ toggleSidebar }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -21,16 +30,56 @@ export default function Header({ toggleSidebar }) {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
-  const notifications = [
-    { id: 1, icon: <FiMail />, title: 'New order detected from ABC Industries', time: '5 min ago', unread: true, color: '#1565c0' },
-    { id: 2, icon: <FiClock />, title: 'Delivery due tomorrow for PO-8192', time: '1 hour ago', unread: true, color: '#e65100' },
-    { id: 3, icon: <FiAlertCircle />, title: 'Shipment delayed for PO-8195', time: '3 hours ago', unread: false, color: '#c62828' },
-    { id: 4, icon: <FiPackage />, title: 'AI review required for 2 orders', time: '5 hours ago', unread: false, color: '#2D4735' },
-    { id: 5, icon: <FiAlertCircle />, title: 'Shipment delayed for PO-8195', time: '3 hours ago', unread: false, color: '#c62828' },
-    { id: 6, icon: <FiPackage />, title: 'AI review required for 2 orders', time: '5 hours ago', unread: false, color: '#2D4735' },
-  ];
+  // Latest notifications for the bell (Module 24)
+  const [inbox, setInbox] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { pathname } = useLocation();
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const loadNotifications = useCallback(() => {
+    notificationService
+      .getInbox(6)
+      .then((data) => {
+        setInbox(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Refresh on page change, every minute, and when notifications are read elsewhere
+  useEffect(() => {
+    loadNotifications();
+  }, [pathname, loadNotifications]);
+  useEffect(() => {
+    const timer = setInterval(loadNotifications, NOTIFICATION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [loadNotifications]);
+  useEffect(() => onNotificationsChanged(loadNotifications), [loadNotifications]);
+
+  const notifications = inbox.map((n) => {
+    const style = notificationStyle(n.type);
+    return {
+      id: n.id,
+      icon: style.icon,
+      title: n.title + (n.message ? ` - ${n.message}` : ''),
+      time: timeAgo(n.created_at),
+      unread: !n.read_at,
+      color: style.color,
+      link: n.link,
+    };
+  });
+
+  const openNotification = (notif) => {
+    setShowNotifications(false);
+    if (notif.unread) {
+      setInbox((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read_at: new Date().toISOString() } : n)));
+      setUnreadCount((c) => Math.max(c - 1, 0));
+      notificationService
+        .markRead(notif.id)
+        .then(() => notifyNotificationsChanged())
+        .catch(() => {});
+    }
+    if (notif.link) navigate(notif.link);
+  };
 
   const allItems = [
     { type: 'order', name: 'ABC Industries', po: 'PO-8192', value: '₹6,20,000', status: 'processing', link: '/app/orders/1' },
@@ -153,8 +202,20 @@ export default function Header({ toggleSidebar }) {
                 {unreadCount > 0 && <span className="notif-unread-count">{unreadCount} new</span>}
               </div>
               <div className="notification-dropdown-list">
+                {notifications.length === 0 && (
+                  <div className="notification-dropdown-item">
+                    <div className="notif-content text-center">
+                      <p className="notif-title">No notifications yet</p>
+                    </div>
+                  </div>
+                )}
                 {notifications.map((notif) => (
-                  <div key={notif.id} className={`notification-dropdown-item ${notif.unread ? 'unread' : ''}`}>
+                  <div
+                    key={notif.id}
+                    className={`notification-dropdown-item ${notif.unread ? 'unread' : ''}`}
+                    onClick={() => openNotification(notif)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <div className="notif-icon" style={{ background: `${notif.color}14`, color: notif.color }}>
                       {notif.icon}
                     </div>
@@ -200,15 +261,16 @@ export default function Header({ toggleSidebar }) {
           
           {isDropdownOpen && (
             <div className="order-dropdown-menu">
-              <Link to="/app/settings" className="order-dropdown-item">
+              <Link to="/app/settings" className="order-dropdown-item" onClick={() => setIsDropdownOpen(false)}>
                 <FiUser /> Profile
               </Link>
-              <Link to="/app/settings" className="order-dropdown-item">
+              <Link to="/app/settings" className="order-dropdown-item" onClick={() => setIsDropdownOpen(false)}>
                 <FiSettings /> Settings
               </Link>
               <hr className="dropdown-divider" />
-              <button 
+              <button
                 onClick={async () => {
+                  setIsDropdownOpen(false);
                   await logout();
                   navigate('/login');
                 }}
