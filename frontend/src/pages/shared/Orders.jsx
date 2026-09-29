@@ -5,15 +5,20 @@ import { exportToCSV, printPage } from '../../utils/exportUtils';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../components/AuthProvider';
+import { preferredOrderType } from '../../utils/trackingPreference';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
+import BootstrapPagination from '../../components/BootstrapPagination';
 import '../../styles/member.css';
 import { LuChevronDown } from 'react-icons/lu';
 
 const currencySymbols = { INR: '₹', USD: '$', AED: 'AED', SAR: 'SAR' };
+// Orders are loaded from the server one page at a time (Module 34: large companies)
+const PAGE_SIZE = 10;
 
 export default function Orders() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
-  const [activeTab, setActiveTab] = useState('sales');
+  const [activeTab, setActiveTab] = useState(() => preferredOrderType(user) || 'sales');
   const [showDropdown, setShowDropdown] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,13 +27,30 @@ export default function Orders() {
   const [openAction, setOpenAction] = useState(null);
   const dropdownRef = useRef(null);
   const actionRef = useRef(null);
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [typeCounts, setTypeCounts] = useState({ sales: 0, purchase: 0 });
+  const [reloadKey, setReloadKey] = useState(0);
+  const search = useDebouncedValue(searchTerm.trim(), 300);
+
+  // Tab, status filter and search are applied on the server; a change starts again at page 1
+  const listParams = { type: activeTab, status: filter, q: search || undefined };
+  const [lastQuery, setLastQuery] = useState(JSON.stringify(listParams));
+  if (JSON.stringify(listParams) !== lastQuery) {
+    setLastQuery(JSON.stringify(listParams));
+    setOffset(0);
+  }
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
     api
-      .get('/orders')
+      .get('/orders', { params: { ...JSON.parse(lastQuery), limit: PAGE_SIZE, offset } })
       .then((res) => {
-        if (mounted) setOrders(res.data.orders || []);
+        if (!mounted) return;
+        setOrders(res.data.orders || []);
+        setTotal(res.data.total || 0);
+        setTypeCounts(res.data.typeCounts || { sales: 0, purchase: 0 });
       })
       .catch(() => {
         if (mounted) toast.error('Failed to load orders');
@@ -39,7 +61,7 @@ export default function Orders() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [lastQuery, offset, reloadKey]);
 
   // Excel export is not part of the Basic plan (Growth and above, and the trial)
   const [planId, setPlanId] = useState(null);
@@ -111,7 +133,7 @@ export default function Orders() {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const displayOrders = orders.map((o) => {
+  const toDisplayOrder = (o) => {
     // Status slug, also for older values like "In Transit"
     const status = String(o.status || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
     const qty = Number(o.total_qty) || 0;
@@ -135,26 +157,28 @@ export default function Orders() {
       status,
       type: o.order_type,
     };
-  });
+  };
 
-  const salesCount = orders.filter((o) => o.order_type === 'sales').length;
-  const purchaseCount = orders.filter((o) => o.order_type === 'purchase').length;
+  // The server already applied the tab, status filter and search (customer, PO, material, LR / tracking no.)
+  const filteredOrders = orders.map(toDisplayOrder);
+  const salesCount = typeCounts.sales;
+  const purchaseCount = typeCounts.purchase;
 
-  const filteredOrders = displayOrders.filter((o) => {
-    const matchesTab = activeTab === 'sales' || activeTab === 'purchase' ? o.type === activeTab : true;
-    const matchesFilter = filter === 'all' || o.status === filter;
-    const term = searchTerm.trim().toLowerCase();
-    // Customer/Supplier, PO, any material, and shipment / LR / AWB / GR numbers
-    const matchesSearch = !term || o.searchText.includes(term);
-    return matchesTab && matchesFilter && matchesSearch;
-  });
-
-  const handleExport = () => {
+  // Export covers every matching order, not only the page on screen
+  const handleExport = async () => {
     if (planId === 'basic') {
       toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
       return;
     }
-    const data = filteredOrders.map((o, i) => ({
+    let allOrders;
+    try {
+      const res = await api.get('/orders', { params: JSON.parse(lastQuery) });
+      allOrders = (res.data.orders || []).map(toDisplayOrder);
+    } catch {
+      toast.error('Failed to export orders');
+      return;
+    }
+    const data = allOrders.map((o, i) => ({
       'Sr No.': i + 1,
       'Customer/Supplier': o.customer,
       'PO': o.po,
@@ -173,6 +197,8 @@ export default function Orders() {
     try {
       await api.delete(`/orders/${orderId}`);
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      // Reload so the page, totals and tab counts stay correct
+      setReloadKey((k) => k + 1);
       toast.success('Order deleted');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete order');
@@ -306,8 +332,8 @@ export default function Orders() {
                 </tr>
               ) : (
                 filteredOrders.map((order, idx) => (
-                <tr key={idx}>
-                  <td>{idx + 1}</td>
+                <tr key={order.id}>
+                  <td>{offset + idx + 1}</td>
                   <td>{order.customer}</td>
                   <td className="po-number">{order.po}</td>
                   <td>{order.material}</td>
@@ -352,6 +378,7 @@ export default function Orders() {
             </tbody>
           </table>
         </div>
+        <BootstrapPagination total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} disabled={loading} />
       </div>
 
        </div>

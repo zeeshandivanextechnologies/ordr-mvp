@@ -4,6 +4,7 @@ import { IoIosNotifications } from 'react-icons/io';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
 import notificationService from '../../services/notificationService';
+import api from '../../services/api';
 import {
   notificationStyle,
   timeAgo,
@@ -12,6 +13,17 @@ import {
 } from '../../utils/notificationDisplay';
 
 const NOTIFICATION_POLL_MS = 60 * 1000;
+// Module 25: header search waits until typing pauses, and needs at least 2 characters
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_MIN_CHARS = 2;
+const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ', SAR: 'SAR ' };
+
+const formatValue = (value, currency) => {
+  const v = Number(value);
+  if (value === null || value === undefined || !Number.isFinite(v) || v <= 0) return null;
+  const symbol = currency ? (CURRENCY_SYMBOLS[currency] ?? `${currency} `) : '₹';
+  return `${symbol}${v.toLocaleString('en-IN')}`;
+};
 
 export default function Header({ toggleSidebar }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -81,28 +93,63 @@ export default function Header({ toggleSidebar }) {
     if (notif.link) navigate(notif.link);
   };
 
-  const allItems = [
-    { type: 'order', name: 'ABC Industries', po: 'PO-8192', value: '₹6,20,000', status: 'processing', link: '/app/orders/1' },
-    { type: 'order', name: 'XYZ Chemicals', po: 'PO-8193', value: '₹1,45,000', status: 'in-transit', link: '/app/orders/2' },
-    { type: 'order', name: 'Global Pharma Ltd', po: 'PO-8194', value: '₹3,80,000', status: 'ready-dispatch', link: '/app/orders/3' },
-    { type: 'order', name: 'MediCorp Solutions', po: 'PO-8195', value: '₹92,000', status: 'delayed', link: '/app/orders/4' },
-    { type: 'order', name: 'TechParts India', po: 'PO-8196', value: '₹2,15,000', status: 'delivered', link: '/app/orders/5' },
-    { type: 'shipment', name: 'SHP-2026-4821', po: 'PO-8192', lr: 'LR-928721', route: 'Mumbai → Delhi', status: 'in-transit', link: '/app/shipments/1' },
-    { type: 'shipment', name: 'SHP-2026-4822', po: 'PO-8193', lr: 'AWB-786543', route: 'Chennai → Pune', status: 'delivered', link: '/app/shipments/2' },
-    { type: 'shipment', name: 'SHP-2026-4823', po: 'PO-8195', lr: 'LR-112233', route: 'Delhi → Kolkata', status: 'delayed', link: '/app/shipments/3' },
-  ];
+  // Search results from the backend: orders and shipments of this company
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
-  const filteredResults = searchQuery.length > 0
-    ? allItems.filter((item) => {
-        const q = searchQuery.toLowerCase();
-        return (
-          item.name.toLowerCase().includes(q) ||
-          item.po.toLowerCase().includes(q) ||
-          (item.lr && item.lr.toLowerCase().includes(q)) ||
-          (item.route && item.route.toLowerCase().includes(q))
-        );
-      })
-    : [];
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < SEARCH_MIN_CHARS) {
+      setSearchResults([]);
+      setSearching(false);
+      return undefined;
+    }
+    let active = true;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      api
+        .get('/search', { params: { q } })
+        .then((res) => {
+          if (!active) return;
+          const orders = (res.data.orders || []).map((o) => ({
+            type: 'order',
+            key: `order-${o.id}`,
+            name: o.party_name || '—',
+            po: o.po_number || '—',
+            lr: o.material || null,
+            value: formatValue(o.total_value, o.currency),
+            status: o.status || 'received',
+            link: `/app/orders/${o.id}`,
+          }));
+          const shipments = (res.data.shipments || []).map((sh) => {
+            const tracking = sh.lr_number ? `LR ${sh.lr_number}` : sh.awb_number ? `AWB ${sh.awb_number}` : sh.gr_number ? `GR ${sh.gr_number}` : null;
+            return {
+              type: 'shipment',
+              key: `shipment-${sh.id}`,
+              name: sh.shipment_number || 'Shipment',
+              po: sh.po_number || '—',
+              lr: tracking,
+              route: sh.origin || sh.destination ? `${sh.origin || '—'} → ${sh.destination || '—'}` : null,
+              status: sh.status || 'dispatched',
+              link: `/app/shipments/${sh.id}`,
+            };
+          });
+          setSearchResults([...orders, ...shipments]);
+        })
+        .catch(() => {
+          if (active) setSearchResults([]);
+        })
+        .finally(() => {
+          if (active) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const filteredResults = searchResults;
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -147,7 +194,15 @@ export default function Header({ toggleSidebar }) {
           />
           {showSearchResults && (
             <div className="search-results-dropdown">
-              {filteredResults.length === 0 ? (
+              {searchQuery.trim().length < SEARCH_MIN_CHARS ? (
+                <div className="search-results-empty">
+                  <p>Type at least {SEARCH_MIN_CHARS} characters to search</p>
+                </div>
+              ) : searching ? (
+                <div className="search-results-empty">
+                  <p>Searching...</p>
+                </div>
+              ) : filteredResults.length === 0 ? (
                 <div className="search-results-empty">
                   <p>No results found for "{searchQuery}"</p>
                 </div>
@@ -156,9 +211,9 @@ export default function Header({ toggleSidebar }) {
                   <div className="search-results-header">
                     <span>{filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''} found</span>
                   </div>
-                  {filteredResults.map((item, idx) => (
+                  {filteredResults.map((item) => (
                     <Link
-                      key={idx}
+                      key={item.key}
                       to={item.link}
                       className="search-result-item"
                       onClick={() => { setSearchQuery(''); setShowSearchResults(false); }}
@@ -169,7 +224,7 @@ export default function Header({ toggleSidebar }) {
                       <div className="search-result-info">
                         <span className="search-result-name">{item.name}</span>
                         <span className="search-result-meta">
-                          {item.po}
+                          {item.type === 'order' ? 'Order' : 'Shipment'} • {item.po}
                           {item.lr && ` • ${item.lr}`}
                           {item.route && ` • ${item.route}`}
                         </span>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings, FiBarChart2 } from 'react-icons/fi';
+import { FiHome, FiBox, FiTruck, FiMail, FiLink, FiBell, FiAlertTriangle, FiCreditCard, FiX, FiSettings, FiBarChart2, FiGlobe } from 'react-icons/fi';
 import { useAuth } from '../AuthProvider';
 import '../../styles/member.css';
 import { MdLogout } from 'react-icons/md';
@@ -25,6 +25,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
   const adminLinks = [
     { path: '/app/billing', label: 'Billing', icon: <FiCreditCard /> },
+    { path: '/app/website-content', label: 'Website Content', icon: <FiGlobe /> },
   ];
 
   const handleLogoutClick = (e) => {

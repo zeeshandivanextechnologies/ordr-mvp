@@ -21,6 +21,11 @@ router.get('/status', authenticate, getConnectionStatus);
 
 // Generate OAuth URL (managing the Gmail integration is admin-only)
 router.get('/gmail/connect', authenticate, requireAdmin, requireActivePlan, connectGmail);
+// Module 31 spec path (POST); an optional redirect may come in the body
+router.post('/gmail/connect', authenticate, requireAdmin, requireActivePlan, (req, res, next) => {
+  if (!req.query.redirect && req.body?.redirect) req.query.redirect = String(req.body.redirect);
+  return connectGmail(req, res, next);
+});
 
 // Handle OAuth callback (public endpoint, validates state token internally)
 router.get('/gmail/callback', gmailCallback);

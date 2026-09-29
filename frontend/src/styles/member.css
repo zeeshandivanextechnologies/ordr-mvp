@@ -337,6 +337,31 @@
   margin: 0;
 }
 
+/* Billing: "Auto-renew monthly" uses the same switch as Settings > Notifications */
+.auto-renew-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auto-renew-toggle .theme-switch input:disabled + .switch-slider {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auto-renew-toggle .auto-renew-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+
+.auto-renew-toggle.on .auto-renew-label {
+  color: var(--theme-text-color);
+}
+
 .member-card-body {
   padding: 16px;
 }
@@ -469,7 +494,6 @@
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
-  margin-left: 8px;
 }
 
 .confidence-tag.high {
@@ -1332,6 +1356,7 @@
   font-weight: 500;
   margin-bottom: 5px;
   color: var(--text-color);
+  word-break: break-all;
 }
 
 /* Review Order: fields the AI is unsure about (drawn with box-shadow so layout does not move) */
@@ -1339,6 +1364,44 @@
   background: #fff5f5;
   border-radius: 4px;
   box-shadow: 0 0 0 6px #fff5f5, 0 0 0 7px #f5c2c7;
+}
+
+/* Review Order Update: summary / applied / warning notes (theme colours, like the status badges) */
+.update-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary-color);
+  background: #f3f2fa;
+  color: var(--theme-text-color);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.update-note svg {
+  flex-shrink: 0;
+  font-size: 18px;
+  margin-top: 1px;
+}
+
+.update-note.success {
+  background: #e8f5e9;
+  border-color: #c8e6c9;
+  border-left-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.update-note.warning {
+  background: #fff3e0;
+  border-color: #ffe0b2;
+  border-left-color: #e65100;
+  color: #e65100;
 }
 
 .connected-box{
@@ -1844,6 +1907,31 @@
   color: var(--text-color);
 }
 
+/* Billing > Auto-Renew row: "Cancel" as a small red outline theme button */
+.thm-btn.outline.auto-renew-cancel {
+  padding: 2px 12px;
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.thm-btn.outline.auto-renew-cancel:hover:not(:disabled) {
+  background-color: #c62828;
+  border-color: #c62828;
+  color: #fff;
+}
+
+.thm-btn.outline.auto-renew-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auto-renew-note {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  padding: 4px 0 8px;
+}
+
 .usage-item {
   padding: 0;
 }
@@ -1866,7 +1954,7 @@
   background: #f0f0f0;
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 0px;
+  margin-bottom: 5px;
 }
 
 .usage-bar-fill {
@@ -2160,9 +2248,9 @@
   border-radius: 10px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
   z-index: 1000;
-  max-height: 400px;
+  max-height: 320px;
   overflow-y: auto;
-  min-width: 380px;
+  min-width: 320px;
 }
 
 .search-results-header {
@@ -2423,4 +2511,313 @@
 
 .password-input {
   padding-right: 44px;
+}
+/* Server-side paging under long tables (Orders, Tracking, AI Order Inbox) */
+.table-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.table-pagination-info,
+.table-pagination-page {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.table-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-pagination-actions .thm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.table-pagination-actions .thm-btn:disabled:hover {
+  background-color: transparent;
+  color: #34308a;
+}
+
+/* Admin > Website Content: repeatable items (cards, testimonials, FAQ ...) */
+/* .website-content .website-content-list {
+  margin-top: 16px;
+} */
+
+.website-content .website-content-list h6 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.website-content .website-content-item {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px 4px;
+  margin-bottom: 12px;
+  background: #fcfcfe;
+}
+
+.website-content .website-content-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text-color);
+}
+
+.website-content .website-content-icon-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.website-content .website-content-icon-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.website-content .website-content-icon-btn.danger:hover:not(:disabled) {
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.website-content .website-content-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.website-content .custom-frm-bx textarea.form-control {
+  height: auto;
+  min-height: 80px;
+}
+
+/* Website Content: photo field (preview + link + upload) */
+.website-content .website-content-photo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.website-content .website-content-photo .form-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.website-content .website-content-photo-preview {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: #f3f2fa;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.website-content .website-content-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.website-content .website-content-photo-btn {
+  flex-shrink: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.website-content .website-content-photo-btn.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Rich-text editor (Website Content > CMS) */
+.rte {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.rte:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(32, 29, 106, 0.1);
+}
+
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border-color);
+  background: #f8f8fc;
+}
+
+.rte-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-color);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rte-btn:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--border-color);
+  color: var(--primary-color);
+}
+
+.rte-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.rte-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rte-content {
+  min-height: 140px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-color);
+  outline: none;
+}
+
+.rte-content p {
+  margin: 0 0 10px;
+}
+
+.rte-content h4 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 14px 0 8px;
+}
+
+.rte-content ul,
+.rte-content ol {
+  padding-left: 22px;
+  margin: 0 0 10px;
+}
+
+.rte-content li > p {
+  margin: 0 0 4px;
+}
+
+.rte-content a {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+/* Bootstrap pagination in the ORDR theme (Orders table) */
+.ordr-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ordr-pagination-info {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.ordr-pagination .pagination {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ordr-pagination .page-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px !important;
+  background: #fff;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.ordr-pagination .page-link:hover {
+  background: #f3f2fa;
+  border-color: var(--primary-border-color);
+  color: var(--primary-color);
+}
+
+.ordr-pagination .page-link:focus {
+  box-shadow: 0 0 0 0.2rem rgba(32, 29, 106, 0.15);
+  z-index: 1;
+}
+
+.ordr-pagination .page-item.active .page-link {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.ordr-pagination .page-item.disabled .page-link {
+  background: #fff;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 575px) {
+  /* .ordr-pagination {
+    justify-content: center;
+  } */
+
+  .ordr-pagination .ordr-pagination-label {
+    display: none;
+  }
 }

@@ -11,11 +11,28 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+// An admin whose company has not finished onboarding (Module 2)
+const needsOnboarding = (user) => user?.role === 'admin' && user?.onboarding_completed === false;
+
 export function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" />;
+  if (needsOnboarding(user)) return <Navigate to="/onboarding/company" replace />;
+
+  return children;
+}
+
+// Onboarding sets up the company, so only a signed-in admin still onboarding may open it.
+// allowCompleted keeps the final "All Set!" step visible right after it marks onboarding done.
+export function OnboardingRoute({ children, allowCompleted = false }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" />;
+  if (user.role !== 'admin') return <Navigate to="/app/dashboard" replace />;
+  if (!allowCompleted && !needsOnboarding(user)) return <Navigate to="/app/dashboard" replace />;
 
   return children;
 }
@@ -41,12 +58,24 @@ export default function AuthProvider({ children }) {
     }
   }, []);
 
+  // Sign-in responses carry only the basic user; /auth/me adds the company's
+  // onboarding state and tracking preference that the route guards need
+  const loadFullUser = async (basicUser) => {
+    try {
+      const me = await authService.getMe();
+      return me?.user || basicUser;
+    } catch (e) {
+      return basicUser;
+    }
+  };
+
   const login = async (email, password) => {
     const data = await authService.login({ email, password });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    const fullUser = await loadFullUser(data.user);
     setAuthRedirect(null);
-    setUser(data.user);
+    setUser(fullUser);
     return data;
   };
 
@@ -54,8 +83,9 @@ export default function AuthProvider({ children }) {
     const data = await authService.signup({ full_name, email, password });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    const fullUser = await loadFullUser(data.user);
     setAuthRedirect(null);
-    setUser(data.user);
+    setUser(fullUser);
     return data;
   };
 
@@ -63,7 +93,8 @@ export default function AuthProvider({ children }) {
     const result = await teamService.acceptInvite(token, data);
     localStorage.setItem('token', result.token);
     localStorage.setItem('user', JSON.stringify(result.user));
-    setUser(result.user);
+    const fullUser = await loadFullUser(result.user);
+    setUser(fullUser);
     return result;
   };
 
@@ -71,9 +102,10 @@ export default function AuthProvider({ children }) {
     const result = await authService.googleCallback(data);
     localStorage.setItem('token', result.token);
     localStorage.setItem('user', JSON.stringify(result.user));
+    const fullUser = await loadFullUser(result.user);
     // Set together with user so the route guard redirects new users to onboarding
     setAuthRedirect(result.isNew ? '/onboarding/company' : '/app/dashboard');
-    setUser(result.user);
+    setUser(fullUser);
     return result;
   };
 

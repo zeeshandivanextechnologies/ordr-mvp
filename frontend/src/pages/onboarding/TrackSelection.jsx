@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiMoreHorizontal, FiShoppingCart, FiPackage } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import companyService from '../../services/companyService';
+import { useAuth } from '../../components/AuthProvider';
 import '../../styles/onboarding.css';
 
 export default function TrackSelection() {
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
 
   useEffect(() => {
     const fetchCompany = async () => {
@@ -47,6 +49,7 @@ export default function TrackSelection() {
     setLoading(true);
     try {
       await companyService.updateCompany({ tracking_preferences: selected });
+      updateUser({ tracking_preferences: selected });
       toast.success('Tracking preferences saved');
       navigate('/onboarding/gmail');
     } catch (err) {

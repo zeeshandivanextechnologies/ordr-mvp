@@ -415,3 +415,39 @@ input[type=number] {
 .clr {
    color: var(--primary-color) !important;
 }
+/* Scrollbars in the theme colours (page, tables, dropdowns, previews).
+   Areas that hide their scrollbar on purpose (e.g. .member-tabs) keep their own, more specific rules. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f0f8;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5c3de;
+  border-radius: 10px;
+  border: 2px solid #f1f0f8;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-border-color);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--primary-color);
+}
+
+::-webkit-scrollbar-corner {
+  background: #f1f0f8;
+}
+
+/* Firefox has no ::-webkit-scrollbar; applied only there so Chrome keeps the rules above */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-color: #c5c3de #f1f0f8;
+  }
+}

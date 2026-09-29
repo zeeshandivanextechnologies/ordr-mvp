@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiUser, FiMail, FiLock, FiBell, FiLink, FiSave, FiHome, FiUsers, FiPlus, FiTrash2, FiEye, FiEyeOff, FiUserCheck, FiUserX, FiUpload } from 'react-icons/fi';
+import { FiUser, FiMail, FiLock, FiBell, FiLink, FiSave, FiHome, FiUsers, FiPlus, FiTrash2, FiEye, FiEyeOff, FiUserCheck, FiUserX, FiUpload, FiShield } from 'react-icons/fi';
 import { LuChevronDown } from 'react-icons/lu';
 import { toast } from 'react-toastify';
 import authService from '../../services/authService';
@@ -25,7 +25,7 @@ function TabLoader() {
 
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState('profile');
-  const { updateUser } = useAuth();
+  const { updateUser, user: currentUser } = useAuth();
 
   const [profile, setProfile] = useState({
     fullName: '',
@@ -429,6 +429,18 @@ export default function AdminSettings() {
     }
   };
 
+  const handleChangeRole = async (user) => {
+    const nextRole = user.role === 'Admin' ? 'member' : 'admin';
+    try {
+      await teamService.updateMemberRole(user.id, nextRole);
+      const newRole = nextRole === 'admin' ? 'Admin' : 'Member';
+      setTeamMembers((prev) => prev.map((m) => (m.id === user.id ? { ...m, role: newRole } : m)));
+      toast.success(nextRole === 'admin' ? 'Member is now an admin' : 'Admin is now a member');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update member role');
+    }
+  };
+
   const handleRevokeInvite = async (inviteId) => {
     try {
       await teamService.revokeInvitation(inviteId);
@@ -783,7 +795,7 @@ export default function AdminSettings() {
                               </span>
                             </td>
                             <td>
-                              {user.role !== 'Admin' && (
+                              {user.id !== currentUser?.id && (
                                 <div className="position-relative" ref={openAction === idx ? actionRef : null}>
                                   <button
                                     className="action-dropdown-btn"
@@ -796,6 +808,9 @@ export default function AdminSettings() {
                                       {/* <Link to="#" className="order-dropdown-item" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleEditMember(); }}>
                                         <FiEdit2 /> Edit
                                       </Link> */}
+                                      <Link to="#" className="order-dropdown-item" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleChangeRole(user); }}>
+                                        {user.role === 'Admin' ? <FiUser /> : <FiShield />} {user.role === 'Admin' ? 'Make Member' : 'Make Admin'}
+                                      </Link>
                                       <Link to="#" className="order-dropdown-item" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleToggleStatus(user); }}>
                                         {user.status === 'Active' ? <FiUserX /> : <FiUserCheck />} {user.status === 'Active' ? 'Mark as Inactive' : 'Mark as Active'}
                                       </Link>

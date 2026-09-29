@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMoreHorizontal, FiCheckCircle } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 import authService from '../../services/authService';
+import companyService from '../../services/companyService';
+import { useAuth } from '../../components/AuthProvider';
 import '../../styles/onboarding.css';
 
 export default function GoToDashboard() {
   const [user, setUser] = useState(null);
+  const { updateUser } = useAuth();
 
   useEffect(() => {
+    // Reaching "All Set!" finishes onboarding, so later logins open the dashboard
+    companyService.completeOnboarding()
+      .then(() => updateUser({ onboarding_completed: true }))
+      .catch(() => toast.error('Failed to finish onboarding. Please try again.'));
+
     const fetchUser = async () => {
       try {
         const res = await authService.getMe();
@@ -63,7 +72,7 @@ export default function GoToDashboard() {
                   <FiCheckCircle size={48} />
                 </div>
                 <h1 className="onboarding-heading">
-                  {user ? `All set, ${user.full_name.split(' ')[0]}!` : 'All set!'}
+                  {user?.full_name ? `All set, ${user.full_name.split(' ')[0]}!` : 'All set!'}
                 </h1>
                 <p className="onboarding-desc">
                   You're ready to start tracking your orders. Your workspace {user && user.company_name ? `for ${user.company_name} ` : ''}is set up and ready to go.

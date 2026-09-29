@@ -1,10 +1,11 @@
 import { getClient, query } from '../config/database.js';
 import path from 'path';
 import { logAudit } from '../utils/audit.js';
+import { trackEvent } from '../utils/analytics.js';
 import fs from 'fs';
 import { hasValidSignature, hashFile, processDocument } from '../services/documentProcessor.js';
 import { assertWithinLimit, getPlanContext, historyCondition, remainingQuota, sendPlanError } from '../services/planGuard.js';
-import { MANUAL_ORDER_STATUSES, STATUS_LABELS, normalizeStatus, recalculateOrder } from '../utils/orderStatus.js';
+import { MANUAL_ORDER_STATUSES, STATUS_LABELS, escapeLike, normalizeStatus, readPaging, recalculateOrder, statusSlugSql } from '../utils/orderStatus.js';
 
 const buildCleanItems = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -317,6 +318,20 @@ export const createShipment = async (req, res, next) => {
       available: Math.max((parseFloat(i.quantity) || 0) - (parseFloat(i.dispatched) || 0), 0),
     }));
 
+    // A shipment must move some quantity when the order has items to ship
+    if (!perItem && !(qtyToAllocate > 0) && orderItems.length > 0) {
+      throw Object.assign(new Error('Quantity must be greater than 0'), { status: 400 });
+    }
+
+    // Shipment events are matched by number, so it must be unique within the order
+    const duplicateNumber = await client.query(
+      'SELECT 1 FROM shipments WHERE order_id = $1 AND LOWER(TRIM(shipment_number)) = LOWER($2) LIMIT 1',
+      [orderId, shipmentNumber.trim()]
+    );
+    if (duplicateNumber.rows.length > 0) {
+      throw Object.assign(new Error(`Shipment number ${shipmentNumber.trim()} already exists for this order`), { status: 400 });
+    }
+
     // Work out how much of each order item goes in this shipment
     const allocations = [];
     if (perItem) {
@@ -332,6 +347,8 @@ export const createShipment = async (req, res, next) => {
           );
         }
         allocations.push({ item, quantity: li.quantity });
+        // The same item listed twice must share one remaining balance
+        item.available -= li.quantity;
       }
     } else if (qtyToAllocate > 0) {
       let remaining = qtyToAllocate;
@@ -402,6 +419,7 @@ export const createShipment = async (req, res, next) => {
     await client.query('COMMIT');
 
     await logAudit(req, 'shipment.created', { entityType: 'shipment', entityId: result.rows[0].id, details: { order_id: orderId, shipment_number: result.rows[0].shipment_number, quantity: result.rows[0].quantity } });
+    trackEvent({ event: 'shipment_created', companyId, userId, properties: { source: 'manual', orderId, shipmentId: result.rows[0].id } });
     res.status(201).json({ message: 'Shipment created successfully', shipment: result.rows[0] });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -419,6 +437,76 @@ export const listOrders = async (req, res, next) => {
     const { company_id: companyId } = req.user;
     // Plan history window: older completed orders are hidden (never deleted)
     const planCtx = await getPlanContext(companyId);
+
+    // Optional filters and paging (Orders page). No parameters = the full list, as before.
+    const paging = readPaging(req.query);
+    const params = [companyId];
+    const filters = [];
+    const type = String(req.query.type || '').toLowerCase();
+    if (type === 'sales' || type === 'purchase') {
+      params.push(type);
+      filters.push(`o.order_type = $${params.length}`);
+    }
+    const status = normalizeStatus(req.query.status);
+    if (status && status !== 'all') {
+      params.push(status);
+      filters.push(`${statusSlugSql('o.status')} = $${params.length}`);
+    }
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) {
+      // Customer/Supplier, PO, any material, and shipment / LR / AWB / GR numbers
+      params.push(`%${escapeLike(q)}%`);
+      const p = `$${params.length}`;
+      filters.push(`(o.party_name ILIKE ${p} OR o.po_number ILIKE ${p}
+        OR EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product ILIKE ${p})
+        OR EXISTS (SELECT 1 FROM shipments s WHERE s.order_id = o.id
+                   AND (s.shipment_number ILIKE ${p} OR s.lr_number ILIKE ${p} OR s.awb_number ILIKE ${p} OR s.gr_number ILIKE ${p})))`);
+    }
+    const where = `o.company_id = $1 AND o.deleted_at IS NULL AND ${historyCondition(planCtx)}${filters.map((f) => ` AND ${f}`).join('')}`;
+    const lastActivitySql = `GREATEST(
+           o.updated_at,
+           COALESCE((SELECT MAX(s.updated_at) FROM shipments s WHERE s.order_id = o.id), o.updated_at),
+           COALESCE((SELECT MAX(te.created_at) FROM tracking_events te WHERE te.order_id = o.id), o.updated_at)
+         )`;
+
+    if (paging) {
+      // Pick the page first, then load the details for just those rows
+      const pageParams = [...params, paging.limit, paging.offset];
+      const [page, total, typeCounts] = await Promise.all([
+        query(
+          `WITH page AS (
+             SELECT o.id, ${lastActivitySql} AS last_activity_at, o.created_at
+             FROM orders o WHERE ${where}
+             ORDER BY last_activity_at DESC NULLS LAST, o.created_at DESC
+             LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+           )
+           SELECT o.*,
+             (SELECT product FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.created_at, oi.id LIMIT 1) AS material,
+             (SELECT unit FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.created_at, oi.id LIMIT 1) AS material_unit,
+             COALESCE((SELECT SUM(quantity) FROM order_items oi WHERE oi.order_id = o.id), 0) AS total_qty,
+             (SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
+             (SELECT COUNT(DISTINCT LOWER(COALESCE(unit, '')))::int FROM order_items oi WHERE oi.order_id = o.id) AS unit_count,
+             (SELECT string_agg(product, ' | ' ORDER BY created_at, id) FROM order_items oi WHERE oi.order_id = o.id) AS materials,
+             (SELECT string_agg(concat_ws(' ', s.shipment_number, s.lr_number, s.awb_number, s.gr_number), ' | ')
+                FROM shipments s WHERE s.order_id = o.id) AS tracking_numbers,
+             page.last_activity_at
+           FROM page JOIN orders o ON o.id = page.id
+           ORDER BY page.last_activity_at DESC NULLS LAST, page.created_at DESC`,
+          pageParams
+        ),
+        query(`SELECT COUNT(*)::int AS count FROM orders o WHERE ${where}`, params),
+        // Tab counts (Sales / Purchase) are for all visible orders, like before
+        query(
+          `SELECT o.order_type, COUNT(*)::int AS count FROM orders o
+           WHERE o.company_id = $1 AND o.deleted_at IS NULL AND ${historyCondition(planCtx)}
+           GROUP BY o.order_type`,
+          [companyId]
+        ),
+      ]);
+      const counts = { sales: 0, purchase: 0 };
+      for (const r of typeCounts.rows) if (counts[r.order_type] !== undefined) counts[r.order_type] = r.count;
+      return res.json({ orders: page.rows, total: total.rows[0].count, typeCounts: counts, limit: paging.limit, offset: paging.offset });
+    }
 
     const result = await query(
       `SELECT o.*,
@@ -438,12 +526,49 @@ export const listOrders = async (req, res, next) => {
            COALESCE((SELECT MAX(te.created_at) FROM tracking_events te WHERE te.order_id = o.id), o.updated_at)
          ) AS last_activity_at
        FROM orders o
-       WHERE o.company_id = $1 AND o.deleted_at IS NULL AND ${historyCondition(planCtx)}
+       WHERE ${where}
        ORDER BY last_activity_at DESC NULLS LAST, o.created_at DESC`,
-      [companyId]
+      params
     );
 
     res.json({ orders: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Module 31: GET /orders/:id/events and /orders/:id/documents (same data as in the order detail)
+const findVisibleOrder = async (req) => {
+  const { company_id: companyId } = req.user;
+  const planCtx = await getPlanContext(companyId);
+  const result = await query(
+    `SELECT id FROM orders WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL AND ${historyCondition(planCtx, 'orders')}`,
+    [req.params.id, companyId]
+  );
+  return result.rows[0] || null;
+};
+
+export const getOrderEvents = async (req, res, next) => {
+  try {
+    if (!(await findVisibleOrder(req))) return res.status(404).json({ message: 'Order not found' });
+    const result = await query(
+      'SELECT id, status, description, created_at FROM tracking_events WHERE order_id = $1 ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json({ trackingEvents: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getOrderDocuments = async (req, res, next) => {
+  try {
+    if (!(await findVisibleOrder(req))) return res.status(404).json({ message: 'Order not found' });
+    const result = await query(
+      'SELECT id, file_name, file_type, file_size, status, created_at FROM po_documents WHERE order_id = $1 ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json({ documents: result.rows });
   } catch (error) {
     next(error);
   }
@@ -745,6 +870,7 @@ export const createOrder = async (req, res, next) => {
     await client.query('COMMIT');
 
     await logAudit(req, 'order.created', { entityType: 'order', entityId: newOrder.id, details: { po_number: newOrder.po_number, source: 'Manual' } });
+    trackEvent({ event: 'manual_order_created', companyId, userId, properties: { orderId: newOrder.id, orderType: newOrder.order_type } });
     res.status(201).json({ message: 'Order created successfully', order: newOrder });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

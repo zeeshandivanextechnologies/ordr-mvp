@@ -10,6 +10,7 @@ import { sendNotificationEmail } from '../utils/emailService.js';
 export const NOTIFICATION_TYPES = {
   new_order_detected: { pref: 'ai_order_detection' },
   ai_review_required: { pref: 'ai_order_detection' },
+  order_update_detected: { pref: 'ai_order_detection' },
   delivery_due_soon: { pref: 'delivery_reminders' },
   shipment_delivered: { pref: 'delivery_reminders' },
   partial_balance_pending: { pref: 'delivery_reminders' },

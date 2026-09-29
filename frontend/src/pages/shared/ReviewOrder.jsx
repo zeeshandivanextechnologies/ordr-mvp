@@ -313,25 +313,25 @@ export default function ReviewOrder() {
                 </div>
                 <div className="member-card-body">
                   <div className="row">
-                    <div className="col-12 mb-3">
+                    <div className="col-lg-12 mb-3">
                       <div className="details-box">
                         <h6>From</h6>
                         <h5>{extract.source_email || '—'}</h5>
                       </div>
                     </div>
-                    <div className="col-12 mb-3">
+                    <div className="col-lg-12 mb-3">
                       <div className="details-box">
                         <h6>Subject</h6>
                         <h5>{extract.source_subject || '—'}</h5>
                       </div>
                     </div>
-                    <div className="col-12 mb-3">
+                    <div className="col-lg-12 mb-3">
                       <div className="details-box">
                         <h6>Date</h6>
                         <h5>{sourceDate ? new Date(sourceDate).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</h5>
                       </div>
                     </div>
-                    <div className="col-12 mb-3">
+                    <div className="col-lg-12 mb-3">
                       <div className="details-box">
                         <h6>Email Body Preview</h6>
                         <div className="email-preview-box" style={{ whiteSpace: 'pre-line' }}>
@@ -339,13 +339,13 @@ export default function ReviewOrder() {
                         </div>
                       </div>
                     </div>
-                    <div className="col-12">
+                    <div className="col-lg-12">
                       <div className="details-box">
                         <h6>Attachment</h6>
-                        <div className="d-flex align-items-center gap-2">
-                          <FiFileText /> {extract.attachment_name || '—'}
+                        <div className="d-flex align-items-center gap-2 justify-content-between">
+                          <h5><FiFileText /> {extract.attachment_name || '—'}</h5>
                           {documentId && (
-                            <button type="button" className="thm-btn outline fz-14 p-2 ms-auto" onClick={handleDownloadDocument}>
+                            <button type="button" className="thm-btn outline fz-14 p-2" onClick={handleDownloadDocument}>
                               <FiDownload /> Download
                             </button>
                           )}
@@ -408,8 +408,8 @@ export default function ReviewOrder() {
                     <div className="alert alert-warning fz-14 mb-3">{extract.duplicate_warning}</div>
                   )}
                   <div className="row">
-                    <div className="col-md-6">
-                      <div className={`custom-frm-bx details-box${lowClass('order_type')}`}>
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className={`custom-frm-bx mb-0  details-box${lowClass('order_type')}`}>
                         <label>Order Type</label>
                         {editMode ? (
                           <select className="form-control" name="order_type" value={form.order_type} onChange={handleInputChange}>
@@ -421,8 +421,8 @@ export default function ReviewOrder() {
                         )}
                       </div>
                     </div>
-                    <div className="col-md-6">
-                      <div className="details-box custom-frm-bx">
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className="details-box custom-frm-bx mb-0">
                         <label>AI Confidence</label>
                         <h5 className="d-flex align-items-center gap-2">
                           {Number.isFinite(Number(extract.confidence)) ? `${Number(extract.confidence)}%` : '—'}
@@ -430,8 +430,8 @@ export default function ReviewOrder() {
                         </h5>
                       </div>
                     </div>
-                    <div className="col-lg-6">
-                      <div className={`details-box custom-frm-bx${lowClass('party_name')}`}>
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className={`details-box mb-0  custom-frm-bx${lowClass('party_name')}`}>
                         <label>Customer / Supplier</label>
                         {editMode ? (
                           <input type="text" className="form-control" name="customer_name" value={form.customer_name} onChange={handleInputChange} />
@@ -440,8 +440,8 @@ export default function ReviewOrder() {
                         )}
                       </div>
                     </div>
-                    <div className="col-lg-6">
-                      <div className={`details-box custom-frm-bx${lowClass('po_number')}`}>
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className={`details-box mb-0  custom-frm-bx${lowClass('po_number')}`}>
                         <label>PO Number</label>
                         {editMode ? (
                           <input type="text" className="form-control" name="po_number" value={form.po_number} onChange={handleInputChange} />
@@ -450,8 +450,8 @@ export default function ReviewOrder() {
                         )}
                       </div>
                     </div>
-                    <div className="col-lg-6">
-                      <div className={`details-box custom-frm-bx${lowClass('order_date')}`}>
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className={`details-box mb-0  custom-frm-bx${lowClass('order_date')}`}>
                         <label>Order Date</label>
                         {editMode ? (
                           <input type="date" className="form-control" name="order_date" value={form.order_date} onChange={handleInputChange} />
@@ -460,8 +460,8 @@ export default function ReviewOrder() {
                         )}
                       </div>
                     </div>
-                    <div className="col-lg-6">
-                      <div className={`details-box custom-frm-bx${lowClass('total_value')}`}>
+                    <div className="col-md-6 col-lg-6 col-sm-12 mb-3">
+                      <div className={`details-box mb-0  custom-frm-bx${lowClass('total_value')}`}>
                         <label>Order Value</label>
                         {editMode ? (
                           <div className="d-flex gap-2">
@@ -482,7 +482,7 @@ export default function ReviewOrder() {
                     {(!hasLineItems || singleLine) && (
                       <>
                         <div className="col-lg-12">
-                          <div className={`details-box custom-frm-bx${hasLineItems ? lowClass('items', firstLine?.confidence) : ''}`}>
+                          <div className={`details-box  custom-frm-bx${hasLineItems ? lowClass('items', firstLine?.confidence) : ''}`}>
                             <label>Product</label>
                             {!hasLineItems ? (
                               editMode ? (
@@ -599,7 +599,7 @@ export default function ReviewOrder() {
                     )}
 
                     <div className="col-lg-6 col-md-6 col-sm-12">
-                      <div className={`details-box custom-frm-bx${lowClass('delivery_location')}`}>
+                      <div className={`details-box  custom-frm-bx${lowClass('delivery_location')}`}>
                         <label>Delivery Location</label>
                         {editMode ? (
                           <input type="text" className="form-control" name="delivery_location" value={form.delivery_location} onChange={handleInputChange} />

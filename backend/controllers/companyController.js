@@ -19,6 +19,20 @@ export const getCompany = async (req, res) => {
   }
 };
 
+// Module 2: called from the last onboarding step ("All Set!")
+export const completeOnboarding = async (req, res) => {
+  const result = await query(
+    'UPDATE companies SET onboarding_completed = true, updated_at = NOW() WHERE id = $1 RETURNING id',
+    [req.user.company_id]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Company not found' });
+  }
+
+  res.json({ message: 'Onboarding completed', onboarding_completed: true });
+};
+
 export const updateCompany = async (req, res) => {
   try {
     const { company_id } = req.user;

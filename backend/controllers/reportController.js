@@ -1,6 +1,11 @@
 // Advanced reporting (Business / Pro plans, Module 28).
 import { query } from '../config/database.js';
 import { getPlanContext, hasFeature } from '../services/planGuard.js';
+import { normalizeStatus } from '../utils/orderStatus.js';
+
+// "Orders by Status" rows follow an order's journey
+const STATUS_ORDER = ['received', 'confirmed', 'processing', 'ready-dispatch', 'partially-dispatched', 'dispatched',
+  'in-transit', 'delayed', 'partially-delivered', 'delivered', 'cancelled'];
 
 // GET /reports?months=6
 export const getReports = async (req, res, next) => {
@@ -31,11 +36,27 @@ export const getReports = async (req, res, next) => {
     );
 
     const byStatus = await query(
-      `SELECT LOWER(o.status) AS status, COUNT(*)::int AS count
+      `SELECT LOWER(o.status) AS status, COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE o.order_type = 'sales')::int AS sales_orders,
+              COUNT(*) FILTER (WHERE o.order_type = 'purchase')::int AS purchase_orders,
+              COALESCE(SUM(o.total_value), 0) AS value
        FROM orders o WHERE ${window}
        GROUP BY 1 ORDER BY 2 DESC`,
       params
     );
+    // Older rows may say "In Transit" instead of "in-transit": both count as one status
+    const statusRows = new Map();
+    for (const r of byStatus.rows) {
+      const status = normalizeStatus(r.status);
+      const row = statusRows.get(status) || { status, count: 0, salesOrders: 0, purchaseOrders: 0, value: 0 };
+      row.count += r.count;
+      row.salesOrders += r.sales_orders;
+      row.purchaseOrders += r.purchase_orders;
+      row.value += Number(r.value);
+      statusRows.set(status, row);
+    }
+    const rank = (s) => (STATUS_ORDER.includes(s) ? STATUS_ORDER.indexOf(s) : STATUS_ORDER.length);
+    const statusSummary = [...statusRows.values()].sort((x, y) => rank(x.status) - rank(y.status) || y.count - x.count);
 
     const topParties = await query(
       `SELECT o.order_type, o.party_name, COUNT(*)::int AS orders, COALESCE(SUM(o.total_value), 0) AS value
@@ -98,7 +119,7 @@ export const getReports = async (req, res, next) => {
         salesValue: Number(r.sales_value),
         purchaseValue: Number(r.purchase_value),
       })),
-      byStatus: byStatus.rows,
+      byStatus: statusSummary,
       topCustomers: top('sales'),
       topSuppliers: top('purchase'),
       delivery: {

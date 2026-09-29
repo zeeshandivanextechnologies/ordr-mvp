@@ -9,7 +9,8 @@
     "start": "node server.js",
     "migrate": "node migrations/run.js",
     "seed": "node seeds/run.js",
-    "test": "node --test --test-concurrency=1 tests/api.test.js"
+    "test": "node --test --test-concurrency=1 --import ./tests/setup.js \"tests/**/*.test.js\"",
+    "test:db": "node tests/setupTestDb.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -26,7 +27,9 @@
     "nodemailer": "^10.0.10",
     "openai": "^7.23.0",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.17.2",
     "pg": "^8.12.0",
+    "sanitize-html": "^2.17.7",
     "uuid": "^10.0.0",
     "xlsx": "^0.18.5"
   },

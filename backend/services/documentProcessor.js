@@ -3,6 +3,7 @@
 import fs from 'fs';
 import crypto from 'crypto';
 import { getClient, query } from '../config/database.js';
+import { trackEvents } from '../utils/analytics.js';
 import { extractOrder, normalizeExtraction, readDocumentContent } from '../utils/orderExtraction.js';
 import { notifyNewDetection } from './notificationService.js';
 
@@ -168,6 +169,14 @@ export const processDocument = async ({ document, companyId, userId, maxExtracts
   } finally {
     client.release();
   }
+
+  trackEvents(createdDetections.map((d) => ({
+    event: 'order_detected',
+    companyId,
+    userId,
+    properties: { source: 'upload', status: d.status, detectionId: d.id },
+    dedupeKey: `order_detected:${d.id}`,
+  })));
 
   // Tell the rest of the team (the uploader already knows)
   for (const d of createdDetections) {

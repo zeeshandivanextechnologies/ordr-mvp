@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { FiArrowLeft, FiTruck, FiCheckCircle, FiAlertCircle, FiClock, FiPackage } from 'react-icons/fi';
+import { FiArrowLeft, FiTruck, FiCheckCircle, FiAlertCircle, FiClock, FiPackage, FiEdit2 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import '../../styles/member.css';
@@ -119,6 +119,11 @@ export default function ShipmentDetail() {
             </div>
             {shipment && (
               <div className="d-flex align-items-center gap-3">
+                {!isClosed && (
+                  <Link to={`/app/shipments/${shipment.id}/edit`} className="thm-btn outline p-2 fz-14">
+                    <FiEdit2 /> Edit
+                  </Link>
+                )}
                 <span className={`status-badge ${currentStatus}`}>
                   {statusLabels[currentStatus] || shipment.status}
                 </span>

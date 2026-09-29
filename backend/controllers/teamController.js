@@ -8,7 +8,7 @@ import { logAudit } from '../utils/audit.js';
 import { assertWithinLimit, getPlanContext, pendingInvitationCount, remainingQuota } from '../services/planGuard.js';
 
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  return jwt.sign({ userId, typ: 'session' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 };
 
 const setTokenCookie = (res, token) => {
@@ -302,6 +302,18 @@ export const listTeamMembers = async (req, res) => {
   }
 };
 
+// A company must always keep at least one active admin to manage billing, Gmail and the team
+const isLastActiveAdmin = async (companyId, userId) => {
+  const result = await query(
+    `SELECT COUNT(*)::int AS count FROM users
+     WHERE company_id = $1 AND id <> $2 AND role = 'admin' AND is_active = true AND removed_at IS NULL`,
+    [companyId, userId]
+  );
+  return result.rows[0].count === 0;
+};
+
+const LAST_ADMIN_ERROR = 'The company must keep at least one active admin';
+
 export const removeTeamMember = async (req, res) => {
   try {
     const { id } = req.params;
@@ -320,8 +332,8 @@ export const removeTeamMember = async (req, res) => {
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    if (result.rows[0].role === 'admin') {
-      return res.status(400).json({ error: 'Cannot remove an admin member' });
+    if (result.rows[0].role === 'admin' && await isLastActiveAdmin(company_id, id)) {
+      return res.status(400).json({ error: LAST_ADMIN_ERROR });
     }
 
     // Soft remove: the account is disabled and hidden, but everything the member created stays
@@ -376,7 +388,7 @@ export const updateMemberStatus = async (req, res) => {
     }
 
     const result = await query(
-      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2 AND removed_at IS NULL',
+      'SELECT id, role, is_active FROM users WHERE id = $1 AND company_id = $2 AND removed_at IS NULL',
       [id, company_id]
     );
 
@@ -384,8 +396,15 @@ export const updateMemberStatus = async (req, res) => {
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    if (result.rows[0].role === 'admin') {
-      return res.status(400).json({ error: 'Cannot change status of an admin member' });
+    const member = result.rows[0];
+
+    if (!is_active && member.role === 'admin' && await isLastActiveAdmin(company_id, id)) {
+      return res.status(400).json({ error: LAST_ADMIN_ERROR });
+    }
+
+    // Re-activating takes a seat again, so it must fit the plan's user limit
+    if (is_active && !member.is_active) {
+      await assertWithinLimit(company_id, 'users');
     }
 
     await query(
@@ -396,7 +415,56 @@ export const updateMemberStatus = async (req, res) => {
     await logAudit(req, is_active ? 'team.member_activated' : 'team.member_deactivated', { entityType: 'user', entityId: id });
     res.json({ message: is_active ? 'Member activated' : 'Member deactivated' });
   } catch (error) {
+    if (error.status === 402) {
+      return res.status(402).json({ error: error.message, code: error.code });
+    }
     console.error('Update Member Status Error:', error);
     res.status(500).json({ error: 'Failed to update member status' });
+  }
+};
+
+// Module 27: admin changes a member's role (Admin <-> Member)
+export const updateMemberRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    const { company_id, id: currentUserId } = req.user;
+
+    if (role !== 'admin' && role !== 'member') {
+      return res.status(400).json({ error: 'Role must be admin or member' });
+    }
+
+    if (id === currentUserId) {
+      return res.status(400).json({ error: 'You cannot change your own role' });
+    }
+
+    const result = await query(
+      'SELECT id, role FROM users WHERE id = $1 AND company_id = $2 AND removed_at IS NULL',
+      [id, company_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    const previousRole = result.rows[0].role;
+    if (previousRole === role) {
+      return res.status(400).json({ error: `Member is already ${role === 'admin' ? 'an admin' : 'a member'}` });
+    }
+
+    if (previousRole === 'admin' && await isLastActiveAdmin(company_id, id)) {
+      return res.status(400).json({ error: LAST_ADMIN_ERROR });
+    }
+
+    await query(
+      'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2',
+      [role, id]
+    );
+
+    await logAudit(req, 'team.member_role_changed', { entityType: 'user', entityId: id, details: { from: previousRole, to: role } });
+    res.json({ message: role === 'admin' ? 'Member is now an admin' : 'Admin is now a member' });
+  } catch (error) {
+    console.error('Update Member Role Error:', error);
+    res.status(500).json({ error: 'Failed to update member role' });
   }
 };

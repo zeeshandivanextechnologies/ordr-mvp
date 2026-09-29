@@ -9,6 +9,11 @@ const companyService = {
   updateCompany: async (data) => {
     const res = await api.patch('/company', data);
     return res.data;
+  },
+
+  completeOnboarding: async () => {
+    const res = await api.post('/company/onboarding/complete');
+    return res.data;
   }
 };
 

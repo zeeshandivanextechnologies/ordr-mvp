@@ -31,6 +31,13 @@ import { up as up29, down as down29 } from './029_notification_categories.js';
 import { up as up30, down as down30 } from './030_attention_thresholds.js';
 import { up as up31, down as down31 } from './031_performance_indexes.js';
 import { up as up32, down as down32 } from './032_billing_autorenew_invoices.js';
+import { up as up33, down as down33 } from './033_onboarding_completed.js';
+import { up as up34, down as down34 } from './034_order_update_suggestions.js';
+import { up as up35, down as down35 } from './035_notification_cleared.js';
+import { up as up36, down as down36 } from './036_create_analytics_events.js';
+import { up as up37, down as down37 } from './037_password_changed_at.js';
+import { up as up38, down as down38 } from './038_create_contact_messages.js';
+import { up as up39, down as down39 } from './039_create_site_content.js';
 
 async function runMigrations() {
   try {
@@ -67,6 +74,13 @@ async function runMigrations() {
     await query(up30);
     await query(up31);
     await query(up32);
+    await query(up33);
+    await query(up34);
+    await query(up35);
+    await query(up36);
+    await query(up37);
+    await query(up38);
+    await query(up39);
     console.log('Migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

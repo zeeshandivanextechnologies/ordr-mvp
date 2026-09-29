@@ -1,7 +1,9 @@
 import { getClient, query } from '../config/database.js';
 import { logAudit } from '../utils/audit.js';
+import { trackEvent } from '../utils/analytics.js';
 import { cleanCurrency, cleanDate, cleanLineItems, summarizeItems } from '../utils/orderExtraction.js';
 import { assertWithinLimit, sendPlanError } from '../services/planGuard.js';
+import { escapeLike, readPaging } from '../utils/orderStatus.js';
 
 const EXTRACT_STATUSES = ['New', 'Needs Review', 'Confirmed', 'Ignored'];
 const EXTRACT_COLUMNS = [
@@ -83,15 +85,37 @@ const estimateItemCount = (itemsText) => {
 export const listAiExtracts = async (req, res, next) => {
   try {
     const { company_id: companyId } = req.user;
+
+    // Optional filters and paging (AI Order Inbox tabs). No parameters = the full list, as before.
+    const paging = readPaging(req.query);
+    const params = [companyId];
+    const filters = [];
+    if (EXTRACT_STATUSES.includes(req.query.status)) {
+      params.push(req.query.status);
+      filters.push(`status = $${params.length}`);
+    }
+    const type = String(req.query.type || '').toLowerCase();
+    if (type === 'sales' || type === 'purchase') {
+      params.push(type);
+      filters.push(`LOWER(order_type) = $${params.length}`);
+    }
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) {
+      params.push(`%${escapeLike(q)}%`);
+      const p = `$${params.length}`;
+      filters.push(`(customer_name ILIKE ${p} OR po_number ILIKE ${p} OR items ILIKE ${p})`);
+    }
+    const where = `company_id = $1${filters.map((f) => ` AND ${f}`).join('')}`;
+
     const { rows } = await query(
       `SELECT id, order_type, customer_name, po_number, items, approx_value,
               email_date, confidence, status, source_email, source_subject,
-              source_body, attachment_name, created_at, currency,
+              attachment_name, created_at, currency,
               COALESCE(jsonb_array_length(line_items), 0) AS line_item_count
        FROM ai_order_extracts
-       WHERE company_id = $1
-       ORDER BY created_at DESC`,
-      [companyId]
+       WHERE ${where}
+       ORDER BY created_at DESC${paging ? ` LIMIT ${paging.limit} OFFSET ${paging.offset}` : ''}`,
+      params
     );
 
     const extracts = rows.map(({ line_item_count: lineItemCount, ...row }) => ({
@@ -99,14 +123,21 @@ export const listAiExtracts = async (req, res, next) => {
       item_count: lineItemCount > 0 ? lineItemCount : estimateItemCount(row.items),
     }));
 
+    // Tab counts are for all detections of the company (not only this page)
     const counts = { New: 0, 'Needs Review': 0, Confirmed: 0, Ignored: 0 };
-    for (const row of extracts) {
+    const countRows = await query(
+      'SELECT status, COUNT(*)::int AS count FROM ai_order_extracts WHERE company_id = $1 GROUP BY status',
+      [companyId]
+    );
+    for (const row of countRows.rows) {
       if (Object.prototype.hasOwnProperty.call(counts, row.status)) {
-        counts[row.status] += 1;
+        counts[row.status] = row.count;
       }
     }
 
-    res.json({ extracts, counts });
+    if (!paging) return res.json({ extracts, counts });
+    const total = await query(`SELECT COUNT(*)::int AS count FROM ai_order_extracts WHERE ${where}`, params);
+    res.json({ extracts, counts, total: total.rows[0].count, limit: paging.limit, offset: paging.offset });
   } catch (error) {
     next(error);
   }
@@ -124,6 +155,12 @@ export const getAiExtract = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+// Module 31 spec path POST /ai-detections/:id/ignore: same as setting status "Ignored"
+export const ignoreAiExtract = (req, res, next) => {
+  req.body = { status: 'Ignored' };
+  return updateAiExtract(req, res, next);
 };
 
 export const updateAiExtract = async (req, res, next) => {
@@ -224,6 +261,9 @@ export const updateAiExtract = async (req, res, next) => {
       entityId: id,
       details: { fields: Object.keys(updates) },
     });
+    if (updates.status === 'Ignored') {
+      trackEvent({ event: 'order_detection_ignored', companyId, userId: req.user.id, properties: { detectionId: id } });
+    }
     res.json({ message: 'Entry updated successfully', extract: formatExtract(rows[0]) });
   } catch (error) {
     next(error);
@@ -345,6 +385,13 @@ export const confirmAiExtract = async (req, res, next) => {
     await client.query('COMMIT');
 
     await logAudit(req, 'ai.confirmed', { entityType: 'ai_detection', entityId: id, details: { order_id: newOrder.id, po_number: newOrder.po_number } });
+    trackEvent({
+      event: 'order_detection_confirmed',
+      companyId,
+      userId: req.user.id,
+      properties: { detectionId: id, orderId: newOrder.id },
+      dedupeKey: `order_detection_confirmed:${id}`,
+    });
     res.status(201).json({ message: 'Order confirmed and created successfully', order: newOrder });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

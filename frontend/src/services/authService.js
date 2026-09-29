@@ -33,6 +33,8 @@ const authService = {
 
   changePassword: async (data) => {
     const res = await api.patch('/auth/password', data);
+    // Older sessions end on a password change; this device continues with the new token
+    if (res.data?.token) localStorage.setItem('token', res.data.token);
     return res.data;
   },
 

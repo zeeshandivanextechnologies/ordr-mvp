@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { extractBodyAndAttachments, prefilterEmail } from '../utils/emailPreFilter.js';
 import { encryptToken, decryptToken, isEncrypted } from '../utils/tokenCrypto.js';
 import { logAudit } from '../utils/audit.js';
+import { trackEvent } from '../utils/analytics.js';
 import { processPendingGmailMessages } from '../services/gmailOrderProcessor.js';
 import { assertWithinLimit, getPlanContext, sendPlanError } from '../services/planGuard.js';
 
@@ -205,7 +206,8 @@ export const connectGmail = async (req, res) => {
     const redirectPath = ALLOWED_REDIRECTS.includes(requestedRedirect) ? requestedRedirect : DEFAULT_REDIRECT;
 
     // Generate a secure state token containing the user id to verify the callback
-    const state = jwt.sign({ userId: id, companyId: company_id, redirectPath }, config.jwtSecret, { expiresIn: '15m' });
+    // typ marks it as a Gmail connect state: it cannot be used as a login token (middleware/auth.js)
+    const state = jwt.sign({ userId: id, companyId: company_id, redirectPath, typ: 'gmail_state' }, config.jwtSecret, { expiresIn: '15m' });
 
     // Generate the URL that will be used for the consent dialog.
     const authorizeUrl = buildOAuthClient().generateAuthUrl({
@@ -243,6 +245,8 @@ export const gmailCallback = async (req, res) => {
     let decoded;
     try {
       decoded = jwt.verify(state, config.jwtSecret);
+      // A login token is not a valid state (links from before this check have no typ)
+      if (decoded.typ && decoded.typ !== 'gmail_state') throw new Error('Wrong token type');
     } catch (err) {
       return res.redirect(`${config.frontendUrl}${redirectPath}?error=Connection+link+expired,+please+try+again`);
     }
@@ -312,9 +316,10 @@ export const gmailCallback = async (req, res) => {
     }
 
     await logAudit({ user: { id: userId, company_id: companyId }, ip: req.ip }, 'gmail.connected', { entityType: 'email_connection', details: { email } });
+    trackEvent({ event: 'gmail_connected', companyId, userId });
     
     // Start the first scan right away in the background (the user does not wait for it)
-    runGmailScan(companyId).catch((err) => {
+    runGmailScan(companyId, { trigger: 'connect', userId }).catch((err) => {
       if (err.status !== 409) console.error('Initial Gmail scan failed:', err.message);
     });
 
@@ -588,7 +593,7 @@ const scanOneConnection = async (companyId, connection) => {
     }
 
     const statusResult = await query(
-      `SELECT email, ${LAST_SCAN_AT_SQL} AS last_scan_at FROM email_connections WHERE id = $1`,
+      `SELECT id, email, is_active, ${LAST_SCAN_AT_SQL} AS last_scan_at FROM email_connections WHERE id = $1`,
       [connection.id]
     );
 
@@ -616,7 +621,8 @@ const scanOneConnection = async (companyId, connection) => {
 // Scans every connected inbox of the company (Business / Pro plans allow several).
 // Used by "Scan Now", right after connecting, and by the automatic background scan.
 // Throws with a `status` (400 not connected / reconnect needed, 409 already scanning).
-export const runGmailScan = async (companyId) => {
+// opts.trigger ('manual' | 'connect' | 'auto') and opts.userId are only used for analytics (Module 36)
+export const runGmailScan = async (companyId, { trigger = 'auto', userId = null } = {}) => {
   if (scanningCompanies.has(companyId)) {
     throw Object.assign(new Error('A scan is already in progress, please wait'), { status: 409 });
   }
@@ -633,6 +639,7 @@ export const runGmailScan = async (companyId) => {
     if (connResult.rows.length === 0) {
       throw Object.assign(new Error('Gmail is not connected. Connect your Gmail first.'), { status: 400 });
     }
+    trackEvent({ event: 'inbox_scan_started', companyId, userId, properties: { trigger, inboxes: connResult.rows.length } });
 
     const results = [];
     const errors = [];
@@ -656,6 +663,19 @@ export const runGmailScan = async (companyId) => {
 
     const sum = (key) => results.reduce((total, r) => total + (r[key] || 0), 0);
     const hasMore = results.some((r) => r.hasMore);
+    trackEvent({
+      event: 'inbox_scan_completed',
+      companyId,
+      userId,
+      properties: {
+        trigger,
+        inboxes: results.length,
+        failedInboxes: errors.length,
+        newMessages: sum('newMessages'),
+        potentialOrders: sum('potentialOrders'),
+        hasMore,
+      },
+    });
     return {
       message: hasMore ? 'Partial scan: more emails remaining, scan again to continue' : 'Inbox scan completed',
       scanned: sum('scanned'),
@@ -678,7 +698,7 @@ export const runGmailScan = async (companyId) => {
 
 export const scanInbox = async (req, res) => {
   try {
-    const result = await runGmailScan(req.user.company_id);
+    const result = await runGmailScan(req.user.company_id, { trigger: 'manual', userId: req.user.id });
     res.json(result);
   } catch (error) {
     if (error.status === 400 || error.status === 409) {

@@ -63,14 +63,15 @@ export default function Notifications() {
   };
 
   const handleMarkAllRead = async () => {
-    if (unreadCount === 0) return;
+    if (items.length === 0) return;
     setMarkingAll(true);
     try {
       await notificationService.markAllRead();
-      const now = new Date().toISOString();
-      setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || now })));
+      // Everything is read and cleared from the list (also from the header bell)
+      setItems([]);
       setUnreadCount(0);
       notifyNotificationsChanged();
+      toast.success('All notifications marked as read');
     } catch {
       toast.error('Failed to mark notifications as read');
     } finally {
@@ -87,7 +88,7 @@ export default function Notifications() {
               <h2>Notifications</h2>
               <p>Stay updated with your orders and shipments</p>
             </div>
-            <button className="thm-btn outline" onClick={handleMarkAllRead} disabled={markingAll || unreadCount === 0}>
+            <button className="thm-btn outline" onClick={handleMarkAllRead} disabled={markingAll || items.length === 0}>
               {markingAll ? 'Marking...' : 'Mark All Read'}
             </button>
           </div>

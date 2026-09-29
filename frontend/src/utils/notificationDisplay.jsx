@@ -4,6 +4,7 @@ import { FiMail, FiAlertCircle, FiPackage, FiClock, FiCheckCircle, FiTruck } fro
 const TYPE_STYLES = {
   new_order_detected: { icon: FiMail, color: '#1565c0' },
   ai_review_required: { icon: FiPackage, color: '#2D4735' },
+  order_update_detected: { icon: FiTruck, color: '#1565c0' },
   delivery_due_soon: { icon: FiClock, color: '#e65100' },
   order_delayed: { icon: FiAlertCircle, color: '#c62828' },
   shipment_delivered: { icon: FiCheckCircle, color: '#2e7d32' },

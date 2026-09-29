@@ -4,14 +4,17 @@
 //   1. Classify it with a cheap AI model (New Sales/Purchase Order, Order/Dispatch/Delivery Update, Not an Order)
 //   2. Only for new orders: download the order attachment (PDF/Excel/CSV/image) and extract the order
 //   3. Save an AI detection in ai_order_extracts (status New / Needs Review) for human review
-// Nothing here creates an official order; that only happens when a user confirms in the AI Order Inbox.
+// Updates to existing orders become suggestions instead (Module 21, services/orderUpdateService.js).
+// Nothing here creates or changes an official order; that only happens when a user confirms in the AI Order Inbox.
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { getClient, query } from '../config/database.js';
+import { trackEvent } from '../utils/analytics.js';
 import {
   DOCUMENT_EXTENSIONS,
+  UPDATE_CLASSIFICATIONS,
   classifyEmail,
   extractOrder,
   normalizeExtraction,
@@ -21,6 +24,7 @@ import { getGmailAccessToken, downloadGmailAttachment } from '../controllers/int
 import { findDuplicateWarning, hasValidSignature } from './documentProcessor.js';
 import { getPlanContext, isReadOnly, remainingQuota } from './planGuard.js';
 import { notifyNewDetection } from './notificationService.js';
+import { createUpdateSuggestion } from './orderUpdateService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.resolve(__dirname, '..', 'uploads', 'po');
@@ -71,27 +75,38 @@ const markProcessed = (messageId) =>
 const processMessage = async (message, companyName, tokenCache) => {
   const from = message.sender_name ? `${message.sender_name} <${message.sender_email}>` : message.sender_email;
 
-  // Step 1: classification (cheap model)
-  const classified = await classifyEmail({
-    companyName,
-    from,
-    subject: message.subject,
-    body: message.body || message.snippet,
-    attachmentNames: message.attachment_names,
-  });
-  if (classified.error) {
-    await recordFailure(message, classified.error);
-    return classified.busy ? 'busy' : 'failed';
+  // Step 1: classification (cheap model). An update email that was already classified
+  // (e.g. queued again for update matching) keeps its classification.
+  let classified;
+  if (UPDATE_CLASSIFICATIONS.includes(message.ai_classification)) {
+    classified = { classification: message.ai_classification, confidence: message.ai_confidence, reason: message.ai_reason };
+  } else {
+    classified = await classifyEmail({
+      companyName,
+      from,
+      subject: message.subject,
+      body: message.body || message.snippet,
+      attachmentNames: message.attachment_names,
+    });
+    if (classified.error) {
+      await recordFailure(message, classified.error);
+      return classified.busy ? 'busy' : 'failed';
+    }
+
+    await query(
+      'UPDATE gmail_messages SET ai_classification = $1, ai_confidence = $2, ai_reason = $3 WHERE id = $4',
+      [classified.classification, classified.confidence, classified.reason, message.id]
+    );
   }
 
-  await query(
-    'UPDATE gmail_messages SET ai_classification = $1, ai_confidence = $2, ai_reason = $3 WHERE id = $4',
-    [classified.classification, classified.confidence, classified.reason, message.id]
-  );
+  // Module 21: an update to an existing order becomes a suggestion for the user to apply
+  if (UPDATE_CLASSIFICATIONS.includes(classified.classification)) {
+    return createUpdateSuggestion(message, companyName, classified, { recordFailure });
+  }
 
   const orderType = NEW_ORDER_TYPES[classified.classification];
   if (!orderType) {
-    // Updates / not an order: no detection is created (update matching is a later module)
+    // Not an order: no detection is created
     await markProcessed(message.id);
     return 'classified';
   }
@@ -220,6 +235,12 @@ const processMessage = async (message, companyName, tokenCache) => {
   }
 
   if (newExtractId) {
+    trackEvent({
+      event: 'order_detected',
+      companyId: message.company_id,
+      properties: { source: 'email', status, detectionId: newExtractId, classification: classified.classification },
+      dedupeKey: `order_detected:${newExtractId}`,
+    });
     await notifyNewDetection(message.company_id, {
       extractId: newExtractId,
       status,

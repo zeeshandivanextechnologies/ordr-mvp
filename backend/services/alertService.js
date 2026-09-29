@@ -4,6 +4,7 @@
 // - When a problem goes away (order delivered, LR added, ...) its open alert is auto-resolved
 // - Dismissed / resolved alerts are never reopened for the same occurrence
 import { query } from '../config/database.js';
+import { trackEvents } from '../utils/analytics.js';
 
 export const ALERT_RULES = {
   DUE_SOON_DAYS: 1,
@@ -170,14 +171,15 @@ export const refreshCompanyAlerts = async (companyId) => {
   // One statement for all alerts (fast even with thousands of orders)
   if (current.length > 0) {
     const col = (fn) => current.map(fn);
-    await query(
+    const upserted = await query(
       `INSERT INTO alerts (company_id, type, severity, title, description, order_id, shipment_id, po_number, party_name, link, dedupe_key)
        SELECT $1, t.type, t.severity, t.title, t.description, t.order_id, t.shipment_id, t.po_number, t.party_name, t.link, t.dedupe_key
        FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::uuid[], $7::uuid[], $8::text[], $9::text[], $10::text[], $11::text[])
          AS t(type, severity, title, description, order_id, shipment_id, po_number, party_name, link, dedupe_key)
        ON CONFLICT (company_id, dedupe_key) DO UPDATE
          SET description = EXCLUDED.description, updated_at = NOW()
-         WHERE alerts.status = 'open' AND alerts.description IS DISTINCT FROM EXCLUDED.description`,
+         WHERE alerts.status = 'open' AND alerts.description IS DISTINCT FROM EXCLUDED.description
+       RETURNING id, type, severity, (xmax = 0) AS inserted`,
       [
         companyId,
         col((a) => a.type),
@@ -192,6 +194,13 @@ export const refreshCompanyAlerts = async (companyId) => {
         col((a) => a.key),
       ]
     );
+    // Module 36: one event per newly created alert
+    trackEvents(upserted.rows.filter((r) => r.inserted).map((r) => ({
+      event: 'alert_created',
+      companyId,
+      properties: { alertId: r.id, type: r.type, severity: r.severity },
+      dedupeKey: `alert_created:${r.id}`,
+    })));
   }
 
   // Problems that no longer exist: their open alerts resolve themselves

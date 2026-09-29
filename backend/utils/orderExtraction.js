@@ -239,6 +239,11 @@ const isTemporaryAiError = (message) => /\b(503|429)\b|overloaded|high demand|un
 // Sends `parts` to Gemini and parses the JSON reply. Tries each model in turn and
 // retries a busy model once before moving on. Returns { data, error, busy }.
 const callGeminiJson = async (parts, modelNames, label) => {
+  // Tests never call the real AI: a test can set globalThis.__ordrAiMock(parts, label) to answer
+  if (process.env.NODE_ENV === 'test') {
+    if (typeof globalThis.__ordrAiMock === 'function') return globalThis.__ordrAiMock(parts, label);
+    return { data: null, error: 'AI is disabled in tests', busy: false };
+  }
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const models = modelNames.filter((m, i) => m && modelNames.indexOf(m) === i);
 
@@ -330,6 +335,88 @@ export const classifyEmail = async ({ companyName, from, subject, body, attachme
     classification,
     confidence: cleanConfidence(data.confidence) ?? 0,
     reason: cleanString(data.reason, 500),
+  };
+};
+
+// ---------- Module 21: details of an update to an existing order ----------
+
+export const UPDATE_CLASSIFICATIONS = ['Order Update', 'Dispatch Update', 'Delivery Update'];
+
+// What the update says happened. Shipment updates move a shipment, the others the order itself.
+export const UPDATE_TYPES = ['confirmed', 'processing', 'ready-dispatch', 'dispatched', 'in-transit', 'delivered', 'delayed', 'cancelled', 'other'];
+
+const buildUpdatePrompt = (companyName) => `This email is an update about an EXISTING order (not a new order).
+${companyName ? `Our company is "${companyName}".\n` : ''}
+Extract only what the email explicitly says. NEVER guess or invent PO numbers, tracking numbers, quantities, dates or names. Use null when a value is not written.
+Dates must be YYYY-MM-DD. Numbers must be plain numbers.
+
+update_type (what happened to the order/goods):
+- "confirmed": the order was accepted/confirmed
+- "processing": the order is being prepared/manufactured
+- "ready-dispatch": goods are packed/ready but not yet sent
+- "dispatched": goods were dispatched/shipped/loaded
+- "in-transit": goods are on the way (tracking / location update)
+- "delivered": goods reached the destination / were received
+- "delayed": dispatch or delivery is delayed
+- "cancelled": the order was cancelled
+- "other": anything else (price/quantity change, question, payment)
+
+Return ONLY JSON (no markdown) with exactly these keys:
+{
+  "po_number": string | null,
+  "party_name": string | null,
+  "update_type": one of the values above | null,
+  "lr_number": string | null,
+  "awb_number": string | null,
+  "gr_number": string | null,
+  "transporter": string | null,
+  "vehicle_number": string | null,
+  "event_date": "YYYY-MM-DD" | null,
+  "expected_delivery_date": "YYYY-MM-DD" | null,
+  "product": string | null,
+  "quantity": number | null,
+  "unit": string | null,
+  "confidence": 0-100
+}
+po_number: the order/PO number the update refers to. party_name: the other company (customer or supplier).
+confidence: how sure you are that the update_type and the reference numbers are correct.`;
+
+// Returns { values } or { error, busy }. Uses the cheap model: only a few short fields are read.
+export const extractOrderUpdate = async ({ companyName, from, subject, body, classification }) => {
+  const emailText = [
+    `From: ${from || ''}`,
+    `Subject: ${subject || ''}`,
+    `Classified as: ${classification}`,
+    '',
+    String(body || '').substring(0, 6000),
+  ].join('\n');
+
+  const { data, error, busy } = await callGeminiJson(
+    [{ text: buildUpdatePrompt(companyName) }, { text: emailText }],
+    CLASSIFICATION_MODELS,
+    'AI Update Extraction'
+  );
+  if (!data) return { error, busy };
+
+  const updateType = String(data.update_type || '').trim().toLowerCase();
+  const quantity = cleanNumber(data.quantity);
+  return {
+    values: {
+      po_number: cleanString(data.po_number, 95),
+      party_name: cleanString(data.party_name, 250),
+      update_type: UPDATE_TYPES.includes(updateType) ? updateType : null,
+      lr_number: cleanString(data.lr_number, 100),
+      awb_number: cleanString(data.awb_number, 100),
+      gr_number: cleanString(data.gr_number, 100),
+      transporter: cleanString(data.transporter, 255),
+      vehicle_number: cleanString(data.vehicle_number, 100),
+      event_date: cleanDate(data.event_date),
+      expected_delivery_date: cleanDate(data.expected_delivery_date),
+      product: cleanString(data.product, 255),
+      quantity: quantity !== null && quantity > 0 ? quantity : null,
+      unit: cleanString(data.unit, 20),
+    },
+    confidence: cleanConfidence(data.confidence) ?? 0,
   };
 };
 
@@ -494,7 +581,7 @@ export const parseOrderList = (rows) => {
 // ---------- shared document pipeline (used by PO upload and Gmail attachments) ----------
 
 const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const XLSX = require('xlsx');
 
 export const DOCUMENT_EXTENSIONS = ['pdf', 'xlsx', 'csv', 'jpg', 'jpeg', 'png'];
@@ -536,11 +623,16 @@ export const readDocumentContent = async (filePath, ext) => {
       console.error(`${ext.toUpperCase()} parsing error:`, err.message);
     }
   } else if (ext === 'pdf') {
+    let parser = null;
     try {
-      const pdfData = await pdf(fs.readFileSync(filePath));
+      parser = new PDFParse({ data: fs.readFileSync(filePath) });
+      // No page markers ("-- 1 of 2 --"), so a scanned PDF still gives empty text
+      const pdfData = await parser.getText({ pageJoiner: '' });
       text = pdfData.text || '';
     } catch (err) {
       console.error('PDF Parsing error:', err.message);
+    } finally {
+      if (parser) await parser.destroy().catch(() => {});
     }
     if (!text.trim()) {
       visionFile = fs.readFileSync(filePath);

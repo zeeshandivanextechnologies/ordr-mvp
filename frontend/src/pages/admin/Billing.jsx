@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import api from '../../services/api';
 import { loadRazorpay } from '../../utils/razorpay';
 import { notifyBillingChanged } from '../../utils/billingEvents';
+import BootstrapPagination from '../../components/BootstrapPagination';
 import '../../styles/member.css';
 
 const formatDate = (d) => {
@@ -12,6 +13,9 @@ const formatDate = (d) => {
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
+
+// Remembers the admin's "Auto-renew monthly" choice across page reloads (this browser only)
+const AUTO_RENEW_PREF_KEY = 'ordr:billing:auto-renew';
 
 const statusBadge = {
   trialing: { label: 'Trial', className: 'processing' },
@@ -23,6 +27,8 @@ const statusBadge = {
 export default function Billing() {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [data, setData] = useState(null);
+  // Payment History: 10 payments per page
+  const [paymentsOffset, setPaymentsOffset] = useState(0);
   const [requesting, setRequesting] = useState(null);
   // Pay monthly automatically (Razorpay subscription) instead of a one-time month
   const [autoRenew, setAutoRenew] = useState(false);
@@ -33,7 +39,12 @@ export default function Billing() {
     api
       .get('/billing')
       .then((res) => {
-        if (mounted) setData(res.data);
+        if (!mounted) return;
+        setData(res.data);
+        // Switch starts ON when auto-renew is active, otherwise as the admin last left it
+        let saved = null;
+        try { saved = localStorage.getItem(AUTO_RENEW_PREF_KEY); } catch { /* storage unavailable */ }
+        setAutoRenew(res.data?.subscription?.autoRenew ? true : saved === 'on');
       })
       .catch(() => {
         if (mounted) toast.error('Failed to load billing details');
@@ -45,6 +56,9 @@ export default function Billing() {
 
   const sub = data?.subscription;
   const isTrial = sub?.plan === 'trial';
+  // A paid plan is running: the auto-renew switch then shows / changes the real auto-renew status
+  const hasActivePaidPlan = !!sub && !isTrial && sub.status === 'active';
+  const autoRenewOn = hasActivePaidPlan ? !!sub.autoRenew : autoRenew;
   const badge = statusBadge[sub?.status] || { label: sub?.status || '—', className: '' };
 
   const currentPlan = {
@@ -183,12 +197,42 @@ export default function Billing() {
     }
   };
 
+  // The switch only decides how the next plan is paid (subscription vs one-time month)
+  // With a paid plan running, the switch IS auto-renew: ON starts it for the current plan
+  // (Razorpay subscription, paid now, plan extended by a month), OFF cancels it.
+  // Without one (trial / expired), it only chooses how the next plan is paid.
+  const handleAutoRenewToggle = async (checked) => {
+    if (hasActivePaidPlan) {
+      if (checked && !sub.autoRenew) {
+        const currentPlanOption = plans.find((p) => p.id === sub.plan);
+        if (!currentPlanOption) return;
+        const price = `₹${Number(sub.price).toLocaleString('en-IN')}`;
+        if (!window.confirm(`Start auto-renew for your ${sub.planName} plan? You pay ${price} now, your plan is extended by 1 month, and it then renews automatically every month. You can cancel anytime.`)) return;
+        await subscribeWithRazorpay(currentPlanOption);
+        return;
+      }
+      if (!checked && sub.autoRenew) {
+        await cancelAutoRenew();
+        return;
+      }
+      return;
+    }
+
+    setAutoRenew(checked);
+    try { localStorage.setItem(AUTO_RENEW_PREF_KEY, checked ? 'on' : 'off'); } catch { /* storage unavailable */ }
+    if (checked) {
+      toast.info('Auto-renew on: the plan you choose next will renew automatically every month. You can cancel anytime.');
+    } else {
+      toast.info('Auto-renew off: the plan you choose next will be a one-time payment for 1 month.');
+    }
+  };
+
   const handleUpgrade = async (plan) => {
     setSelectedPlan(plan.id);
     const isCurrentPlan = sub?.plan === plan.id && sub?.status === 'active';
     if (!data?.paymentsEnabled) await requestUpgrade(plan);
     // Renewing the current plan is always a one-time extra month
-    else if (autoRenew && !isCurrentPlan) await subscribeWithRazorpay(plan);
+    else if (autoRenewOn && !isCurrentPlan) await subscribeWithRazorpay(plan);
     else await payWithRazorpay(plan);
   };
 
@@ -198,6 +242,9 @@ export default function Billing() {
     try {
       const res = await api.post('/billing/cancel-auto-renew');
       setData(res.data);
+      // The "Auto-renew monthly" switch follows: the next plan will be a one-time payment
+      setAutoRenew(false);
+      try { localStorage.setItem(AUTO_RENEW_PREF_KEY, 'off'); } catch { /* storage unavailable */ }
       notifyBillingChanged();
       toast.success(res.data.message);
     } catch (err) {
@@ -219,6 +266,50 @@ export default function Billing() {
     } catch {
       if (win) win.close();
       toast.error('Failed to load the invoice');
+    }
+  };
+
+  // Downloads the same invoice page as a PDF. It is rendered in a hidden frame so its
+  // styles never touch the app, then captured (html2canvas) and saved as an A4 PDF (jsPDF).
+  const [downloadingId, setDownloadingId] = useState(null);
+  const downloadInvoice = async (paymentRowId, invoiceNumber) => {
+    if (downloadingId) return;
+    setDownloadingId(paymentRowId);
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.setAttribute('tabindex', '-1');
+    Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: '840px', height: '1200px', border: '0' });
+    try {
+      const res = await api.get(`/billing/invoices/${paymentRowId}`, { responseType: 'text' });
+      document.body.appendChild(frame);
+      await new Promise((resolve) => {
+        frame.onload = resolve;
+        frame.srcdoc = res.data;
+      });
+      const doc = frame.contentDocument;
+      if (doc.fonts?.ready) await doc.fonts.ready;
+      const invoice = doc.querySelector('.invoice');
+      if (!invoice) throw new Error('Invoice not found');
+
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+      const canvas = await html2canvas(invoice, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const margin = 8;
+      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+      let width = pageWidth;
+      let height = (canvas.height * width) / canvas.width;
+      if (height > pageHeight) {
+        height = pageHeight;
+        width = (canvas.width * height) / canvas.height;
+      }
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin + (pageWidth - width) / 2, margin, width, height);
+      pdf.save(`${invoiceNumber || 'ORDR-invoice'}.pdf`);
+    } catch {
+      toast.error('Failed to download the invoice');
+    } finally {
+      frame.remove();
+      setDownloadingId(null);
     }
   };
 
@@ -354,17 +445,24 @@ export default function Billing() {
                 </div>
               )}
               {!isTrial && data?.paymentsEnabled && (
-                <div className="billing-detail-row">
-                  <span className="billing-detail-label">Auto-Renew</span>
-                  <span className="billing-detail-value">
-                    {sub?.autoRenew ? 'On' : 'Off'}
-                    {sub?.autoRenew && (
-                      <button type="button" className="btn btn-link btn-sm p-0 ms-2 text-danger" onClick={cancelAutoRenew} disabled={cancelling}>
-                        {cancelling ? 'Cancelling...' : 'Cancel'}
-                      </button>
-                    )}
-                  </span>
-                </div>
+                <>
+                  <div className="billing-detail-row">
+                    <span className="billing-detail-label">Auto-Renew</span>
+                    <span className="billing-detail-value d-flex align-items-center gap-2">
+                      <span className={`status-badge ${sub?.autoRenew ? 'delivered' : 'cancelled'}`}>
+                        {sub?.autoRenew ? 'On' : 'Off'}
+                      </span>
+                      {sub?.autoRenew && (
+                        <button type="button" className="thm-btn outline fz-14 auto-renew-cancel" onClick={cancelAutoRenew} disabled={cancelling}>
+                          {cancelling ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  {!sub?.autoRenew && !hasActivePaidPlan && autoRenew && (
+                    <div className="auto-renew-note">Auto-renew will start with the next plan you choose below.</div>
+                  )}
+                </>
               )}
               <div className="billing-detail-row border-0">
                 <span className="billing-detail-label">Status</span>
@@ -415,16 +513,18 @@ export default function Billing() {
             <div className="member-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
               <h5>Choose Your Plan</h5>
               {data?.paymentsEnabled && (
-                <div className="form-check form-switch mb-0">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="autoRenewToggle"
-                    checked={autoRenew}
-                    onChange={(e) => setAutoRenew(e.target.checked)}
-                    disabled={!!requesting}
-                  />
-                  <label className="form-check-label" htmlFor="autoRenewToggle" style={{ fontSize: 14 }}>
+                <div className={`auto-renew-toggle${autoRenewOn ? ' on' : ''}`}>
+                  <div className="theme-switch">
+                    <input
+                      type="checkbox"
+                      id="autoRenewToggle"
+                      checked={autoRenewOn}
+                      onChange={(e) => handleAutoRenewToggle(e.target.checked)}
+                      disabled={!!requesting || cancelling}
+                    />
+                    <label className="switch-slider" htmlFor="autoRenewToggle"></label>
+                  </div>
+                  <label className="auto-renew-label" htmlFor="autoRenewToggle">
                     Auto-renew monthly
                   </label>
                 </div>
@@ -482,7 +582,14 @@ export default function Billing() {
         </div>
       </div>
 
-      {data?.payments && data.payments.length > 0 && (
+      {data?.payments && data.payments.length > 0 && (() => {
+        const PAYMENTS_PER_PAGE = 10;
+        // Stay on a page that has rows (e.g. the list got shorter)
+        const start = paymentsOffset >= data.payments.length
+          ? Math.floor((data.payments.length - 1) / PAYMENTS_PER_PAGE) * PAYMENTS_PER_PAGE
+          : paymentsOffset;
+        const pagePayments = data.payments.slice(start, start + PAYMENTS_PER_PAGE);
+        return (
         <div className="row mt-3">
           <div className="col-lg-12">
             <div className="member-card">
@@ -498,11 +605,11 @@ export default function Billing() {
                       <th>Amount</th>
                       <th>Payment ID</th>
                       <th>Status</th>
-                      <th>Invoice</th>
+                      <th className='text-center'>Invoice</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.payments.map((p) => (
+                    {pagePayments.map((p) => (
                       <tr key={p.paymentId || p.paidAt}>
                         <td>{formatDate(p.paidAt)}</td>
                         <td>{p.planName}</td>
@@ -511,9 +618,20 @@ export default function Billing() {
                         <td><span className="status-badge delivered">Paid</span></td>
                         <td>
                           {p.id ? (
-                            <button type="button" className="thm-btn p-1 fz-14" onClick={() => viewInvoice(p.id)} title={p.invoiceNumber || ''}>
-                              View
-                            </button>
+                            <div className="d-flex gap-2 justify-content-center align-items-center">
+                              <button type="button" className="thm-btn p-1 fz-14" onClick={() => viewInvoice(p.id)} title={p.invoiceNumber || ''}>
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                className="thm-btn outline p-1 fz-14"
+                                onClick={() => downloadInvoice(p.id, p.invoiceNumber)}
+                                disabled={!!downloadingId}
+                                title={p.invoiceNumber ? `Download ${p.invoiceNumber}.pdf` : 'Download PDF'}
+                              >
+                                {downloadingId === p.id ? 'Downloading...' : 'Download'}
+                              </button>
+                            </div>
                           ) : '—'}
                         </td>
                       </tr>
@@ -521,10 +639,12 @@ export default function Billing() {
                   </tbody>
                 </table>
               </div>
+              <BootstrapPagination total={data.payments.length} limit={PAYMENTS_PER_PAGE} offset={start} onChange={setPaymentsOffset} />
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </>
   );
 }

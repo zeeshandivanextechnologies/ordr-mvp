@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { query, getClient } from '../config/database.js';
+import { trackEvents } from '../utils/analytics.js';
 import config from '../config/environment.js';
 import { sendOtpEmail } from '../utils/emailService.js';
 
@@ -41,7 +42,7 @@ const checkOtp = async (userId, otp) => {
 const OTP_LOCKED_MESSAGE = 'Too many wrong attempts. Please request a new OTP.';
 
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  return jwt.sign({ userId, typ: 'session' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 };
 
 const setTokenCookie = (res, token) => {
@@ -53,6 +54,18 @@ const setTokenCookie = (res, token) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
+
+// Module 36: a new account creates a company and starts its 14-day trial
+const trackSignup = (user, method) =>
+  trackEvents(
+    ['signup_completed', 'company_created', 'trial_started'].map((event) => ({
+      event,
+      companyId: user.company_id,
+      userId: user.id,
+      properties: { method },
+      dedupeKey: `${event}:${user.company_id}`,
+    }))
+  );
 
 export const signup = async (req, res) => {
   const client = await getClient();
@@ -91,6 +104,7 @@ export const signup = async (req, res) => {
     await client.query('COMMIT');
 
     const user = userResult.rows[0];
+    trackSignup(user, 'email');
     const token = generateToken(user.id);
     setTokenCookie(res, token);
 
@@ -181,7 +195,8 @@ export const getMe = async (req, res) => {
     const result = await query(
       `SELECT u.id, u.company_id, u.full_name, u.email,
               u.role, u.avatar_url, u.phone, u.designation, u.gst_number, u.created_at,
-              c.name as company_name, c.industry, c.country, c.timezone
+              c.name as company_name, c.industry, c.country, c.timezone,
+              c.tracking_preferences, c.onboarding_completed
        FROM users u
        LEFT JOIN companies c ON u.company_id = c.id
        WHERE u.id = $1`,
@@ -330,12 +345,17 @@ export const changePassword = async (req, res) => {
 
     const password_hash = await bcrypt.hash(new_password, 12);
 
+    // Other devices are signed out; this one gets a fresh session. Whole seconds, so the
+    // new token (issued in the same second) stays valid.
+    const changedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
     await query(
-      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [password_hash, req.user.id]
+      'UPDATE users SET password_hash = $1, password_changed_at = $2, updated_at = NOW() WHERE id = $3',
+      [password_hash, changedAt, req.user.id]
     );
 
-    res.json({ message: 'Password updated successfully' });
+    const token = generateToken(req.user.id);
+    setTokenCookie(res, token);
+    res.json({ message: 'Password updated successfully', token });
   } catch (error) {
     throw error;
   }
@@ -476,7 +496,8 @@ export const resetPassword = async (req, res) => {
     const client = await getClient();
     try {
       await client.query('BEGIN');
-      await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [password_hash, user_id]);
+      // Every existing session ends after a reset (the user signs in with the new password)
+      await client.query('UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2', [password_hash, user_id]);
       await client.query('UPDATE password_resets SET used = true WHERE user_id = $1 AND token = $2', [user_id, hashOtp(user_id, otp)]);
       await client.query('COMMIT');
     } catch (e) {
@@ -578,6 +599,7 @@ export const googleCallback = async (req, res) => {
 
         await client.query('COMMIT');
         user = userResult.rows[0];
+        trackSignup(user, 'google');
       } catch (e) {
         await client.query('ROLLBACK');
         throw e;

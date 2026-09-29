@@ -9,7 +9,7 @@ export default function InviteTeam() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [invites, setInvites] = useState([
-    { email: '', role: 'admin' },
+    { email: '', role: 'member' },
     { email: '', role: 'member' },
   ]);
 

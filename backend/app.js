@@ -20,6 +20,11 @@ import dashboardRoutes from './routes/dashboard.js';
 import billingRoutes from './routes/billing.js';
 import auditRoutes from './routes/audit.js';
 import alertRoutes from './routes/alerts.js';
+import searchRoutes from './routes/search.js';
+import uploadRoutes from './routes/uploads.js';
+import analyticsRoutes from './routes/analytics.js';
+import contactRoutes from './routes/contact.js';
+import siteContentRoutes from './routes/siteContent.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -67,9 +72,25 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Auth routes with their own brute-force limiters (routes/auth.js), so the general
+// limit never blocks signing in once a user has been browsing the app for a while
+const AUTH_LIMITED_PATHS = new Set([
+  '/auth/signup',
+  '/auth/login',
+  '/auth/password',
+  '/auth/forgot-password',
+  '/auth/verify-otp',
+  '/auth/resend-otp',
+  '/auth/reset-password',
+  '/auth/google/callback',
+]);
+
+// The app polls notifications and loads several endpoints per page, so normal use
+// needs far more than 100 requests per 15 minutes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
+  skip: (req) => AUTH_LIMITED_PATHS.has(req.path),
   message: { error: 'Too many requests, please try again later' },
 });
 
@@ -88,6 +109,14 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/search', searchRoutes);
+// Module 31 spec paths, served alongside the existing ones (same routers and rules)
+app.use('/api/ai-detections', aiInboxRoutes);
+app.use('/api/integrations', integrationRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/site-content', siteContentRoutes);
 import reportRoutes from './routes/reports.js';
 app.use('/api/reports', reportRoutes);
 

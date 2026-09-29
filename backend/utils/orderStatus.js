@@ -1,3 +1,5 @@
+import { trackEventInTx } from './analytics.js';
+
 // Order/shipment status helpers. Statuses are stored as lowercase slugs
 // (e.g. 'in-transit') so the frontend can use them directly as badge classes.
 
@@ -31,6 +33,23 @@ export const normalizeStatus = (value) => {
   if (slug === 'canceled') return 'cancelled';
   return slug;
 };
+
+// The same normalization in SQL, for filtering by status (e.g. "In Transit" = 'in-transit')
+export const statusSlugSql = (column) => `(CASE
+  WHEN regexp_replace(lower(trim(COALESCE(${column}, ''))), '[\\s_]+', '-', 'g') IN ('ready', 'ready-for-dispatch') THEN 'ready-dispatch'
+  WHEN regexp_replace(lower(trim(COALESCE(${column}, ''))), '[\\s_]+', '-', 'g') = 'canceled' THEN 'cancelled'
+  ELSE regexp_replace(lower(trim(COALESCE(${column}, ''))), '[\\s_]+', '-', 'g')
+END)`;
+
+// List pages: ?limit=50&offset=100. Without a limit the full list is returned (older callers).
+export const readPaging = (queryParams, { max = 200 } = {}) => {
+  if (queryParams.limit === undefined) return null;
+  const limit = Math.min(Math.max(parseInt(queryParams.limit, 10) || 50, 1), max);
+  const offset = Math.max(parseInt(queryParams.offset, 10) || 0, 0);
+  return { limit, offset };
+};
+
+export const escapeLike = (value) => String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
 
 const deriveStatus = (currentStatus, items, activeShipments) => {
   if (currentStatus === 'cancelled') return currentStatus;
@@ -176,6 +195,10 @@ export const recalculateOrder = async (client, orderId, companyId, userId) => {
        VALUES ($1, $2, $3, $4, $5, clock_timestamp())`,
       [orderId, companyId, newStatus, `Order status changed to ${STATUS_LABELS[newStatus] || newStatus}`, userId]
     );
+    // Module 36: kept only if the caller's transaction commits
+    if (newStatus === 'delivered') {
+      await trackEventInTx(client, { event: 'order_delivered', companyId, userId, properties: { orderId } });
+    }
   }
 
   return newStatus;

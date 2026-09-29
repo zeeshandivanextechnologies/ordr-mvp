@@ -6,13 +6,15 @@ import { fetchCountries, fetchStates, fetchCities } from '../../services/locatio
 import { fetchCurrencies } from '../../services/currencyService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../components/AuthProvider';
+import { preferredOrderType } from '../../utils/trackingPreference';
 import '../../styles/member.css';
 
 export default function AddOrder() {
   const navigate = useNavigate();
   const location = useLocation();
   const editingId = location.state?.editId || null;
-  const [orderType, setOrderType] = useState('sales');
+  const { user } = useAuth();
+  const [orderType, setOrderType] = useState(() => preferredOrderType(user) || 'sales');
   const [lines, setLines] = useState([{ product: '', sku: '', description: '', qty: '', unit: 'MT', unitPrice: '', total: '' }]);
   const [prefillLoading, setPrefillLoading] = useState(!!editingId);
 

@@ -67,15 +67,26 @@ export default function Reports() {
     { orders: 0, sales: 0, purchase: 0 }
   );
 
+  // "Orders by Status" totals (for the Total row and each status's share)
+  const statusTotal = (data?.byStatus || []).reduce(
+    (acc, s) => ({
+      count: acc.count + (Number(s.count) || 0),
+      salesOrders: acc.salesOrders + (Number(s.salesOrders) || 0),
+      purchaseOrders: acc.purchaseOrders + (Number(s.purchaseOrders) || 0),
+      value: acc.value + (Number(s.value) || 0),
+    }),
+    { count: 0, salesOrders: 0, purchaseOrders: 0, value: 0 }
+  );
+
   const kpis = data
     ? [
-        { label: 'Orders', value: totals.orders.toLocaleString('en-IN'), sub: `Last ${months} months`, icon: <FiBarChart2 />, color: '#2D4735' },
-        { label: 'On-time Delivery', value: data.delivery.onTimeRate === null ? '—' : `${data.delivery.onTimeRate}%`, sub: `${data.delivery.deliveredOrders} delivered orders`, icon: <FiCheckCircle />, color: '#2e7d32' },
-        { label: 'Avg. Delivery Time', value: data.delivery.avgDeliveryDays === null ? '—' : `${data.delivery.avgDeliveryDays} days`, sub: 'Order created to delivered', icon: <FiClock />, color: '#e65100' },
-        { label: 'Delayed Shipments', value: `${data.shipments.delayed}`, sub: `of ${data.shipments.total} shipments`, icon: <FiTruck />, color: '#c62828' },
-        { label: 'AI Detections Confirmed', value: data.ai.total ? `${Math.round((data.ai.confirmed / data.ai.total) * 100)}%` : '—', sub: `${data.ai.confirmed} of ${data.ai.total} (${data.ai.from_email} from email)`, icon: <FiCpu />, color: '#1565c0' },
-        { label: 'Sales / Purchase Value', value: money(totals.sales), sub: `Purchases ${money(totals.purchase)}`, icon: <FiBarChart2 />, color: '#0277bd' },
-      ]
+      { label: 'Orders', value: totals.orders.toLocaleString('en-IN'), sub: `Last ${months} months`, icon: <FiBarChart2 />, color: '#2D4735' },
+      { label: 'On-time Delivery', value: data.delivery.onTimeRate === null ? '—' : `${data.delivery.onTimeRate}%`, sub: `${data.delivery.deliveredOrders} delivered orders`, icon: <FiCheckCircle />, color: '#2e7d32' },
+      { label: 'Avg. Delivery Time', value: data.delivery.avgDeliveryDays === null ? '—' : `${data.delivery.avgDeliveryDays} days`, sub: 'Order created to delivered', icon: <FiClock />, color: '#e65100' },
+      { label: 'Delayed Shipments', value: `${data.shipments.delayed}`, sub: `of ${data.shipments.total} shipments`, icon: <FiTruck />, color: '#c62828' },
+      { label: 'AI Detections Confirmed', value: data.ai.total ? `${Math.round((data.ai.confirmed / data.ai.total) * 100)}%` : '—', sub: `${data.ai.confirmed} of ${data.ai.total} (${data.ai.from_email} from email)`, icon: <FiCpu />, color: '#1565c0' },
+      { label: 'Sales / Purchase Value', value: money(totals.sales), sub: `Purchases ${money(totals.purchase)}`, icon: <FiBarChart2 />, color: '#0277bd' },
+    ]
     : [];
 
   return (
@@ -105,7 +116,13 @@ export default function Reports() {
         </div>
       )}
 
-      {loading && <div className="text-center py-4 text-secondary">Loading reports...</div>}
+      {loading &&
+        <div className="d-flex justify-content-center align-items-center" style={{ height: "200px" }} role="status">
+          <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      }
 
       {!loading && locked && (
         <div className="row">
@@ -213,18 +230,51 @@ export default function Reports() {
                 <div className="table-responsive">
                   <table className="member-table">
                     <thead>
-                      <tr><th>Status</th><th>Orders</th></tr>
+                      <tr>
+                        <th>SR. No.</th>
+                        <th>Status</th>
+                        <th>Orders</th>
+                        <th>Sales</th>
+                        <th>Purchase</th>
+                        <th>Order Value</th>
+                        <th style={{ minWidth: 160 }}>Share</th></tr>
                     </thead>
                     <tbody>
                       {data.byStatus.length === 0 && (
-                        <tr><td colSpan={2} className="text-center py-4 text-secondary">No orders in this period</td></tr>
+                        <tr><td colSpan={6} className="text-center py-4 text-secondary">No orders in this period</td></tr>
                       )}
-                      {data.byStatus.map((s) => (
-                        <tr key={s.status}>
-                          <td><span className={`status-badge ${s.status}`}>{statusLabels[s.status] || s.status}</span></td>
-                          <td>{s.count}</td>
+                      {data.byStatus.map((s, idx) => {
+                        const share = statusTotal.count > 0 ? Math.round((s.count / statusTotal.count) * 100) : 0;
+                        return (
+                          <tr key={s.status}>
+                            <td>{idx + 1}</td>
+                            <td>{s.count}</td>
+                            <td>{s.salesOrders ?? '—'}</td>
+                            <td>{s.purchaseOrders ?? '—'}</td>
+                            <td>{s.value !== undefined ? money(s.value) : '—'}</td>
+                            <td>
+                              <div className="usage-bar mb-1" title={`${share}% of all orders in this period`}>
+                                <div className="usage-bar-fill" style={{ width: `${share}%` }} />
+                              </div>
+                              <span className="usage-pct">{share}%</span>
+                            </td>
+
+                            <td><span className={`status-badge ${s.status}`}>{statusLabels[s.status] || s.status}</span></td>
+
+                          </tr>
+                        );
+                      })}
+                      {data.byStatus.length > 0 && (
+                        <tr>
+                      
+                          <td><strong>Total</strong></td>
+                          <td><strong>{statusTotal.count}</strong></td>
+                          <td><strong>{statusTotal.salesOrders}</strong></td>
+                          <td><strong>{statusTotal.purchaseOrders}</strong></td>
+                          <td><strong>{money(statusTotal.value)}</strong></td>
+                          <td><span className="usage-pct"></span></td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>

@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom';
 import { FiChevronDown, FiEye, FiFileText } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
+import BootstrapPagination from '../../components/BootstrapPagination';
 import '../../styles/member.css';
+
+// Shipments are loaded from the server one page at a time (Module 34: large companies)
+const PAGE_SIZE = 10;
 
 const formatDate = (d) => {
   if (!d) return '—';
@@ -32,13 +37,36 @@ export default function Tracking() {
   const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
   const actionRef = useRef(null);
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({});
+  const search = useDebouncedValue(searchTerm.trim(), 300);
+
+  // Tab and filter both narrow the status: together they either agree or match nothing
+  const status = activeTab === 'all' ? filter : filter === 'all' || filter === activeTab ? activeTab : null;
+  const listQuery = JSON.stringify({ status, q: search || undefined });
+  const [lastQuery, setLastQuery] = useState(listQuery);
+  if (listQuery !== lastQuery) {
+    setLastQuery(listQuery);
+    setOffset(0);
+  }
 
   useEffect(() => {
     let mounted = true;
+    const params = JSON.parse(lastQuery);
+    if (params.status === null) {
+      setShipments([]);
+      setTotal(0);
+      setLoading(false);
+      return undefined;
+    }
+    setLoading(true);
     api
-      .get('/shipments')
+      .get('/shipments', { params: { ...params, limit: PAGE_SIZE, offset } })
       .then((res) => {
         if (!mounted) return;
+        setTotal(res.data.total || 0);
+        setStatusCounts(res.data.counts || {});
         setShipments(
           (res.data.shipments || []).map((s) => ({
             id: s.id,
@@ -66,7 +94,7 @@ export default function Tracking() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [lastQuery, offset]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -94,20 +122,16 @@ export default function Tracking() {
     cancelled: 'Cancelled',
   };
 
+  // Counts cover all shipments of the company (from the server), not only this page
   const tabs = [
-    { key: 'all', label: 'All', count: shipments.length },
-    { key: 'in-transit', label: 'In Transit', count: shipments.filter(s => s.status === 'in-transit').length },
-    { key: 'delayed', label: 'Delayed', count: shipments.filter(s => s.status === 'delayed').length },
-    { key: 'delivered', label: 'Delivered', count: shipments.filter(s => s.status === 'delivered').length },
+    { key: 'all', label: 'All', count: statusCounts.all || 0 },
+    { key: 'in-transit', label: 'In Transit', count: statusCounts['in-transit'] || 0 },
+    { key: 'delayed', label: 'Delayed', count: statusCounts.delayed || 0 },
+    { key: 'delivered', label: 'Delivered', count: statusCounts.delivered || 0 },
   ];
 
-  const term = searchTerm.trim().toLowerCase();
-  const filteredShipments = shipments.filter((s) => {
-    const matchesTab = activeTab === 'all' || s.status === activeTab;
-    const matchesFilter = filter === 'all' || s.status === filter;
-    const matchesSearch = !term || s.searchText.includes(term);
-    return matchesTab && matchesFilter && matchesSearch;
-  });
+  // The server already applied the status and the search (customer, PO, LR / AWB / GR, shipment no.)
+  const filteredShipments = shipments;
 
   return (
     <>
@@ -200,7 +224,7 @@ export default function Tracking() {
                   )}
                   {!loading && filteredShipments.map((shipment, idx) => (
                     <tr key={shipment.id}>
-                      <td>{idx + 1}</td>
+                      <td>{offset + idx + 1}</td>
                       <td>{shipment.customer}</td>
                       <td className="po-number">{shipment.po}</td>
                       <td>{shipment.lrAwb}</td>
@@ -237,6 +261,7 @@ export default function Tracking() {
                 </tbody>
               </table>
             </div>
+            <BootstrapPagination total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} disabled={loading} />
           </div>
         </div>
       </div>

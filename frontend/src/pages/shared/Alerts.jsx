@@ -171,7 +171,11 @@ export default function Alerts() {
         <div className="col-lg-12">
           <div className="member-card">
             {loading ? (
-              <div className="text-center py-4 text-secondary">Loading alerts...</div>
+               <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
+      <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+        <span className="visually-hidden">Loading...</span>
+      </div>
+    </div>
             ) : filteredAlerts.length === 0 ? (
               <div className="member-empty-state">
                 <div className="empty-icon"><FiCheck /></div>

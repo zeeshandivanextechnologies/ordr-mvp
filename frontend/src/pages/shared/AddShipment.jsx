@@ -6,7 +6,9 @@ import { toast } from 'react-toastify';
 import '../../styles/member.css';
 
 export default function AddShipment() {
-  const { id } = useParams();
+  // Add: /app/orders/:id/shipments/add — Edit: /app/shipments/:shipmentId/edit
+  const { id, shipmentId } = useParams();
+  const isEdit = Boolean(shipmentId);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,6 +34,7 @@ export default function AddShipment() {
   const [orderItems, setOrderItems] = useState([]);
   const [itemQty, setItemQty] = useState({});
   useEffect(() => {
+    if (isEdit) return undefined;
     let mounted = true;
     api
       .get(`/orders/${id}`)
@@ -42,7 +45,47 @@ export default function AddShipment() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, isEdit]);
+
+  // Edit mode: load the shipment's current details (number and quantities stay fixed)
+  const [editLoading, setEditLoading] = useState(isEdit);
+  useEffect(() => {
+    if (!isEdit) return undefined;
+    let mounted = true;
+    api
+      .get(`/shipments/${shipmentId}`)
+      .then((res) => {
+        if (!mounted) return;
+        const s = res.data.shipment;
+        setFormData({
+          shipmentNumber: s.shipment_number || '',
+          quantity: '',
+          items: s.items || '',
+          transporter: s.transporter || '',
+          lrNumber: s.lr_number || '',
+          awbNumber: s.awb_number || '',
+          grNumber: s.gr_number || '',
+          vehicleNumber: s.vehicle_number || '',
+          origin: s.origin || '',
+          destination: s.destination || '',
+          dispatchDate: s.dispatch_date_value || '',
+          expectedDeliveryDate: s.expected_delivery_date_value || '',
+        });
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        toast.error(err.response?.data?.message || 'Failed to load shipment');
+        navigate(`/app/shipments/${shipmentId}`);
+      })
+      .finally(() => {
+        if (mounted) setEditLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [isEdit, shipmentId, navigate]);
+
+  const backTo = isEdit ? `/app/shipments/${shipmentId}` : `/app/orders/${id}`;
 
   const remainingOf = (item) => Math.max((Number(item.quantity) || 0) - (Number(item.dispatched) || 0), 0);
   const multiItem = orderItems.length > 1;
@@ -50,6 +93,20 @@ export default function AddShipment() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isEdit) {
+      const { shipmentNumber: _number, quantity: _qty, ...details } = formData;
+      try {
+        setLoading(true);
+        await api.patch(`/shipments/${shipmentId}`, details);
+        toast.success('Shipment updated successfully');
+        navigate(backTo);
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Failed to update shipment');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!formData.shipmentNumber.trim()) {
       toast.error('Shipment Number is required');
       return;
@@ -65,6 +122,9 @@ export default function AddShipment() {
       }
       const { quantity: _unused, ...rest } = formData;
       payload = { ...rest, lineItems };
+    } else if (singleItem && !(Number(formData.quantity) > 0)) {
+      toast.error('Quantity must be greater than 0');
+      return;
     }
     try {
       setLoading(true);
@@ -80,8 +140,9 @@ export default function AddShipment() {
 
   const fields = [
     { name: 'shipmentNumber', label: 'Shipment Number', type: 'text', placeholder: 'e.g. SHP-2203', required: true },
-    // Multi-item orders enter quantities per item in the table below instead
-    ...(multiItem
+    // Multi-item orders enter quantities per item in the table below instead;
+    // quantities cannot be changed when editing
+    ...(multiItem || isEdit
       ? []
       : [{
           name: 'quantity',
@@ -97,8 +158,8 @@ export default function AddShipment() {
     <div>
       <div className="member-page-header">
         <div className="d-flex align-items-center gap-3">
-          <button className="back-btn" onClick={() => navigate(`/app/orders/${id}`)}><FiArrowLeft /><span className='back-mobile-hide'> Back</span> </button>
-          <h2 className="mb-0">Add Shipment</h2>
+          <button className="back-btn" onClick={() => navigate(backTo)}><FiArrowLeft /><span className='back-mobile-hide'> Back</span> </button>
+          <h2 className="mb-0">{isEdit ? 'Edit Shipment' : 'Add Shipment'}</h2>
         </div>
       </div>
 
@@ -117,6 +178,7 @@ export default function AddShipment() {
                       value={formData[f.name]}
                       onChange={handleInputChange}
                       placeholder={f.placeholder}
+                      disabled={isEdit && f.name === 'shipmentNumber'}
                     />
                   </div>
                 </div>
@@ -245,8 +307,8 @@ export default function AddShipment() {
               </div>
             </div>
             <div className="">
-              <button className="thm-btn" type="submit" disabled={loading}>
-                {loading ? 'Saving...' : 'Save Shipment'}
+              <button className="thm-btn" type="submit" disabled={loading || editLoading}>
+                {loading ? 'Saving...' : isEdit ? 'Save Changes' : 'Save Shipment'}
               </button>
             </div>
           </form>

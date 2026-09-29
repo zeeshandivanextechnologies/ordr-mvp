@@ -115,7 +115,7 @@ export default function Signup() {
                     onChange={(e) => setAgreedToTerms(e.target.checked)}
                     required
                   />
-                  <label htmlFor="terms">I agree to the <Link to="#" className="auth-forgot-btn  fz-14">Terms & Conditions</Link></label>
+                  <label htmlFor="terms">I agree to the <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="auth-forgot-btn  fz-14">Terms & Conditions</Link></label>
                 </div>
 
               <div className='mb-2'>

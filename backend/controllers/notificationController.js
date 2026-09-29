@@ -71,13 +71,13 @@ export const listMyNotifications = async (req, res, next) => {
     const { rows } = await query(
       `SELECT id, type, title, message, link, entity_type, entity_id, read_at, created_at
        FROM notifications
-       WHERE user_id = $1
+       WHERE user_id = $1 AND cleared_at IS NULL
        ORDER BY created_at DESC
        LIMIT $2`,
       [req.user.id, limit]
     );
     const unread = await query(
-      'SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL',
+      'SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL AND cleared_at IS NULL',
       [req.user.id]
     );
     res.json({ notifications: rows, unreadCount: unread.rows[0].count });
@@ -105,8 +105,10 @@ export const markNotificationRead = async (req, res, next) => {
 // POST /notifications/inbox/read-all
 export const markAllNotificationsRead = async (req, res, next) => {
   try {
+    // Marks everything read and clears it from the list (rows stay, see migration 035)
     const result = await query(
-      'UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL',
+      `UPDATE notifications SET read_at = COALESCE(read_at, NOW()), cleared_at = NOW()
+       WHERE user_id = $1 AND cleared_at IS NULL`,
       [req.user.id]
     );
     res.json({ message: 'All notifications marked as read', updated: result.rowCount });

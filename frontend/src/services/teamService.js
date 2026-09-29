@@ -26,6 +26,11 @@ const teamService = {
     return res.data;
   },
 
+  updateMemberRole: async (userId, role) => {
+    const res = await api.patch(`/team/members/${userId}/role`, { role });
+    return res.data;
+  },
+
   revokeInvitation: async (inviteId) => {
     const res = await api.delete(`/team/invitations/${inviteId}`);
     return res.data;
