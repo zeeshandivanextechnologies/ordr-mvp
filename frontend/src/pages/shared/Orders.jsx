@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
-import { exportToCSV, printPage } from '../../utils/exportUtils';
+import { exportToCSV, printPage, printTable } from '../../utils/exportUtils';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../components/AuthProvider';
@@ -164,21 +164,11 @@ export default function Orders() {
   const salesCount = typeCounts.sales;
   const purchaseCount = typeCounts.purchase;
 
-  // Export covers every matching order, not only the page on screen
-  const handleExport = async () => {
-    if (planId === 'basic') {
-      toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
-      return;
-    }
-    let allOrders;
-    try {
-      const res = await api.get('/orders', { params: JSON.parse(lastQuery) });
-      allOrders = (res.data.orders || []).map(toDisplayOrder);
-    } catch {
-      toast.error('Failed to export orders');
-      return;
-    }
-    const data = allOrders.map((o, i) => ({
+  // Export and Print cover every matching order, not only the page on screen
+  const loadAllRows = async () => {
+    const res = await api.get('/orders', { params: JSON.parse(lastQuery) });
+    const allOrders = (res.data.orders || []).map(toDisplayOrder);
+    return allOrders.map((o, i) => ({
       'Sr No.': i + 1,
       'Customer/Supplier': o.customer,
       'PO': o.po,
@@ -188,6 +178,50 @@ export default function Orders() {
       'Due Date': o.due,
       'Status': statusLabels[o.status],
     }));
+  };
+
+  const [printing, setPrinting] = useState(false);
+  const handlePrint = async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      const rows = await loadAllRows();
+      if (rows.length === 0) {
+        toast.info('No orders to print');
+        return;
+      }
+      const { q, status } = JSON.parse(lastQuery);
+      const meta = [
+        `${rows.length} order${rows.length === 1 ? '' : 's'}`,
+        `Status: ${status && status !== 'all' ? statusLabels[status] || status : 'All'}`,
+        q ? `Search: "${q}"` : null,
+      ].filter(Boolean);
+      const statusSlugs = Object.fromEntries(Object.entries(statusLabels).map(([slug, label]) => [label, slug]));
+      printTable(`${activeTab === 'sales' ? 'Sales' : 'Purchase'} Orders`, rows, {
+        meta,
+        badgeColumn: 'Status',
+        badgeOf: (label) => statusSlugs[label],
+        strongColumns: ['PO'],
+      });
+    } catch {
+      toast.error('Failed to print orders');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (planId === 'basic') {
+      toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
+      return;
+    }
+    let data;
+    try {
+      data = await loadAllRows();
+    } catch {
+      toast.error('Failed to export orders');
+      return;
+    }
     exportToCSV(data, `${activeTab}_orders`);
   };
 
@@ -225,8 +259,8 @@ export default function Orders() {
           <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
             <FiDownload /> Export
           </button>
-          <button className="thm-btn outline fz-14 p-2" >
-            <FiPrinter /> Print
+          <button className="thm-btn outline fz-14 p-2" onClick={handlePrint} disabled={printing}>
+            <FiPrinter /> {printing ? 'Preparing...' : 'Print'}
           </button>
 
           <div className="position-relative" ref={actionRef}>

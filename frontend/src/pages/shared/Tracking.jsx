@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiChevronDown, FiEye, FiFileText } from 'react-icons/fi';
+import { FiChevronDown, FiEye, FiFileText, FiDownload, FiPrinter } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 import BootstrapPagination from '../../components/BootstrapPagination';
+import { exportToCSV, printTable } from '../../utils/exportUtils';
 import '../../styles/member.css';
 
 // Shipments are loaded from the server one page at a time (Module 34: large companies)
@@ -96,6 +97,21 @@ export default function Tracking() {
     };
   }, [lastQuery, offset]);
 
+  // Excel export is not part of the Basic plan (Growth and above, and the trial), same as Orders
+  const [planId, setPlanId] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get('/billing')
+      .then((res) => {
+        if (mounted) setPlanId(res.data?.subscription?.plan || null);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (actionRef.current && !actionRef.current.contains(e.target)) {
@@ -133,6 +149,79 @@ export default function Tracking() {
   // The server already applied the status and the search (customer, PO, LR / AWB / GR, shipment no.)
   const filteredShipments = shipments;
 
+  // Export and Print cover every matching shipment (current tab, filter and search), not only the page on screen
+  const loadAllRows = async () => {
+    const params = JSON.parse(lastQuery);
+    if (params.status === null) return [];
+    const res = await api.get('/shipments', { params });
+    return (res.data.shipments || []).map((s, i) => ({
+      'Sr No.': i + 1,
+      'Customer/Supplier': s.party_name || '—',
+      'PO': s.po_number || '—',
+      'Shipment No.': s.shipment_number || '—',
+      'Transporter': s.transporter || '—',
+      'LR/AWB': s.lr_number || s.awb_number || s.gr_number || '—',
+      'Route': s.origin || s.destination ? `${s.origin || '—'} → ${s.destination || '—'}` : '—',
+      'Dispatch Date': formatDate(s.dispatch_date),
+      'ETA': formatDate(s.expected_delivery_date),
+      'Status': statusLabels[s.status] || s.status,
+      'Last Updated': formatDate(s.updated_at || s.created_at),
+    }));
+  };
+
+  const [busy, setBusy] = useState(null);
+  const handleExport = async () => {
+    if (planId === 'basic') {
+      toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
+      return;
+    }
+    if (busy) return;
+    setBusy('export');
+    try {
+      const rows = await loadAllRows();
+      if (rows.length === 0) {
+        toast.info('No shipments to export');
+        return;
+      }
+      exportToCSV(rows, 'shipments');
+    } catch {
+      toast.error('Failed to export shipments');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (busy) return;
+    setBusy('print');
+    try {
+      const rows = await loadAllRows();
+      if (rows.length === 0) {
+        toast.info('No shipments to print');
+        return;
+      }
+      const { q } = JSON.parse(lastQuery);
+      const statusName = (key) => filterOptions.find((o) => o.value === key)?.label || key;
+      const meta = [
+        `${rows.length} shipment${rows.length === 1 ? '' : 's'}`,
+        `Status: ${statusName(activeTab !== 'all' ? activeTab : filter)}`,
+        q ? `Search: "${q}"` : null,
+      ].filter(Boolean);
+      const statusSlugs = Object.fromEntries(Object.entries(statusLabels).map(([slug, label]) => [label, slug]));
+      printTable('Shipments', rows, {
+        meta,
+        badgeColumn: 'Status',
+        badgeOf: (label) => statusSlugs[label],
+        strongColumns: ['PO'],
+        nowrapColumns: ['PO', 'Shipment No.', 'LR/AWB', 'Dispatch Date', 'ETA', 'Last Updated'],
+      });
+    } catch {
+      toast.error('Failed to print shipments');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <>
       <div className='row'>
@@ -143,6 +232,12 @@ export default function Tracking() {
               <p>Track all your shipments in one place</p>
             </div>
             <div className="d-flex gap-2">
+              <button className="thm-btn outline fz-14 p-2" onClick={handleExport} disabled={busy === 'export'}>
+                <FiDownload /> {busy === 'export' ? 'Preparing...' : 'Export'}
+              </button>
+              <button className="thm-btn outline fz-14 p-2" onClick={handlePrint} disabled={busy === 'print'}>
+                <FiPrinter /> {busy === 'print' ? 'Preparing...' : 'Print'}
+              </button>
             </div>
           </div>
         </div>

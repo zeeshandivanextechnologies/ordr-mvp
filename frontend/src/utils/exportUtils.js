@@ -89,3 +89,228 @@ export function printPage(title, tableSelector) {
     printWindow.print();
   }, 500);
 }
+
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Same colours as the status badges in member.css
+const BADGE_COLORS = {
+  received: ['#f1f8e9', '#558b2f'],
+  confirmed: ['#e0f2f1', '#00695c'],
+  processing: ['#fff3e0', '#e65100'],
+  'ready-dispatch': ['#e8f5e9', '#2e7d32'],
+  'partially-dispatched': ['#fff8e1', '#f57f17'],
+  dispatched: ['#e3f2fd', '#1565c0'],
+  'in-transit': ['#e1f5fe', '#0277bd'],
+  'partially-delivered': ['#f3e5f5', '#7b1fa2'],
+  delayed: ['#ffebee', '#c62828'],
+  delivered: ['#e8f5e9', '#1b5e20'],
+  cancelled: ['#fafafa', '#616161'],
+};
+
+// ---- Shared pieces of the printed pages (app look: ORDR brand, theme colours, Poppins) ----
+
+const PRINT_STYLES = `
+        :root { --primary-color: #201d6a; --primary-border-color: #39347f; --text-color: #00022A; --text-secondary: #626884; --border-color: #d9d8e6; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Poppins', Arial, sans-serif; font-weight: 500; padding: 24px; color: var(--text-color); background: #fff; }
+        .print-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 2px solid var(--primary-color); }
+        .brand { font-size: 28px; font-weight: 800; color: var(--primary-color); letter-spacing: 1px; line-height: 1; }
+        .title { font-size: 16px; font-weight: 600; color: var(--text-color); margin-top: 8px; }
+        .printed { font-size: 11px; color: var(--text-secondary); text-align: right; white-space: nowrap; }
+        .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+        .chip { font-size: 11px; font-weight: 500; color: var(--primary-color); background: #f0f0f7; border: 1px solid var(--border-color); border-radius: 20px; padding: 3px 10px; }
+        .table-wrap { border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th { background: var(--primary-border-color); color: #fff; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; white-space: nowrap; }
+        td { padding: 9px 12px; font-size: 11.5px; font-weight: 500; color: var(--text-color); border-bottom: 1px solid #f0f0f0; vertical-align: middle; text-transform: capitalize; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:nth-child(even) td { background: #fafafa; }
+        td.strong { font-weight: 600; color: var(--primary-color); text-transform: none; }
+        td.nowrap { white-space: nowrap; }
+        body.compact th { padding: 8px 7px; font-size: 9.5px; letter-spacing: 0.3px; white-space: normal; }
+        body.compact td { padding: 8px 7px; font-size: 10.5px; }
+        body.compact .badge { padding: 3px 8px; font-size: 10px; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+        .print-footer { display: flex; justify-content: space-between; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 10px; color: var(--text-secondary); }
+        @page { size: A4 landscape; margin: 10mm; }
+        @media print {
+          body { padding: 0; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }`;
+
+// Extra styles for reports with several parts (Dashboard): KPI cards, section titles, lists.
+// Printed upright (portrait): these reports are long rather than wide.
+const REPORT_STYLES = `
+        @page { size: A4 portrait; margin: 10mm; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+        .kpi { border: 1px solid var(--border-color); border-radius: 12px; padding: 9px 12px; page-break-inside: avoid; }
+        .kpi-label { font-size: 10.5px; color: var(--text-secondary); }
+        .kpi-value { font-size: 19px; font-weight: 700; margin-top: 1px; line-height: 1.3; }
+        .kpi-sub { font-size: 10.5px; color: var(--text-secondary); }
+        .section { margin-bottom: 18px; }
+        .section-title { font-size: 13px; font-weight: 600; color: var(--primary-color); margin-bottom: 8px; page-break-after: avoid; }
+        .list { border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; }
+        .list-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-bottom: 1px solid #f0f0f0; page-break-inside: avoid; }
+        .list-item:last-child { border-bottom: none; }
+        .list-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+        .list-title { font-size: 11.5px; font-weight: 600; }
+        .list-desc { font-size: 10.5px; color: var(--text-secondary); }
+        .empty { padding: 12px; font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; }`;
+
+const printedOnText = () =>
+  new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+const printPageHtml = ({ title, meta = [], body, footerRight = '', compact = false, extraStyles = '' }) => `<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${escapeHtml(title)} - ORDR</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      <style>${PRINT_STYLES}${extraStyles}
+      </style>
+    </head>
+    <body${compact ? ' class="compact"' : ''}>
+      <div class="print-header">
+        <div>
+          <div class="brand">ORDR</div>
+          <div class="title">${escapeHtml(title)}</div>
+        </div>
+        <div class="printed">Printed on<br>${escapeHtml(printedOnText())}</div>
+      </div>
+      ${meta.length ? `<div class="meta">${meta.map((m) => `<span class="chip">${escapeHtml(m)}</span>`).join('')}</div>` : ''}
+      ${body}
+      <div class="print-footer">
+        <span>Generated by ORDR - B2B Order Management Platform</span>
+        <span>${escapeHtml(footerRight)}</span>
+      </div>
+    </body>
+    </html>`;
+
+const tableHtml = (rows, { badgeColumn, badgeOf, strongColumns = [], nowrapColumns = [] } = {}) => {
+  const headers = Object.keys(rows[0]);
+  const cell = (header, value) => {
+    if (header === badgeColumn && value) {
+      const [bg, fg] = BADGE_COLORS[badgeOf?.(value)] || ['#f0f0f5', '#39347f'];
+      return `<td><span class="badge" style="background:${bg};color:${fg}">${escapeHtml(value)}</span></td>`;
+    }
+    const classes = [strongColumns.includes(header) && 'strong', nowrapColumns.includes(header) && 'nowrap'].filter(Boolean);
+    return `<td${classes.length ? ` class="${classes.join(' ')}"` : ''}>${escapeHtml(value)}</td>`;
+  };
+  return `<div class="table-wrap">
+        <table>
+          <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map((row) => `<tr>${headers.map((h) => cell(h, row[h])).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+};
+
+// Prints the html in a hidden frame, so no pop-up window is needed and the page itself is left untouched
+const printHtml = (html) => {
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(frame);
+  const win = frame.contentWindow;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+
+  const cleanup = () => setTimeout(() => frame.remove(), 1000);
+  win.onafterprint = cleanup;
+  let printed = false;
+  const print = () => {
+    if (printed) return;
+    printed = true;
+    win.focus();
+    win.print();
+    // Browsers without onafterprint support: remove the frame after a while
+    setTimeout(cleanup, 60000);
+  };
+  // Wait for the stylesheet and the Poppins font so the print uses it (never longer than 2.5 seconds)
+  const loaded = new Promise((resolve) => {
+    const check = () => (win.document.readyState === 'complete' ? resolve() : setTimeout(check, 50));
+    check();
+  }).then(() => win.document.fonts?.ready);
+  Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 2500))])
+    .catch(() => {})
+    .then(() => setTimeout(print, 150));
+};
+
+// Prints rows (array of objects, keys = column headings) as a table in the app's own look
+// (ORDR brand, theme colours, Poppins, status badges).
+// options: { meta: ['25 orders', 'Delayed'], badgeColumn: 'Status', badgeOf: (value) => 'delayed', strongColumns: ['PO'],
+//            nowrapColumns: ['ETA'] }  (tables with many columns are printed a little tighter)
+export function printTable(title, rows, options = {}) {
+  if (!rows || rows.length === 0) return false;
+  const { meta = [], ...tableOptions } = options;
+  printHtml(printPageHtml({
+    title,
+    meta,
+    body: tableHtml(rows, tableOptions),
+    footerRight: `${rows.length} row${rows.length === 1 ? '' : 's'}`,
+    compact: Object.keys(rows[0]).length > 9,
+  }));
+  return true;
+}
+
+// Prints a report with several parts, in the same look as printTable:
+//   kpis:     [{ label, value, sub, color }]
+//   sections: [{ title, rows, tableOptions, empty }]              a table (rows = array of objects)
+//             [{ title, items: [{ title, desc, color }], empty }]  a list
+export function printReport(title, { meta = [], kpis = [], sections = [] } = {}) {
+  const kpiHtml = kpis.length
+    ? `<div class="kpi-grid">${kpis.map((k) => `
+        <div class="kpi" style="border-top: 3px solid ${escapeHtml(k.color || '#39347f')}">
+          <div class="kpi-label">${escapeHtml(k.label)}</div>
+          <div class="kpi-value">${escapeHtml(k.value)}</div>
+          <div class="kpi-sub">${escapeHtml(k.sub || '')}</div>
+        </div>`).join('')}</div>`
+    : '';
+  const sectionHtml = sections.map((s) => {
+    let content;
+    if (s.rows) {
+      content = s.rows.length ? tableHtml(s.rows, s.tableOptions) : `<div class="empty">${escapeHtml(s.empty || 'Nothing to show')}</div>`;
+    } else {
+      content = s.items?.length
+        ? `<div class="list">${s.items.map((item) => `
+            <div class="list-item">
+              <span class="list-dot" style="background:${escapeHtml(item.color || '#39347f')}"></span>
+              <div><div class="list-title">${escapeHtml(item.title)}</div><div class="list-desc">${escapeHtml(item.desc || '')}</div></div>
+            </div>`).join('')}</div>`
+        : `<div class="empty">${escapeHtml(s.empty || 'Nothing to show')}</div>`;
+    }
+    return `<div class="section"><div class="section-title">${escapeHtml(s.title)}</div>${content}</div>`;
+  }).join('');
+  printHtml(printPageHtml({ title, meta, body: kpiHtml + sectionHtml, extraStyles: REPORT_STYLES }));
+  return true;
+}
+
+// Several tables in one CSV file (a title line, the table, then an empty line).
+// Starts with a byte-order mark so Excel shows ₹ and other symbols correctly.
+export function exportSectionsToCSV(sections, filename) {
+  const esc = (val) => {
+    const text = String(val ?? '');
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [];
+  sections.forEach(({ title, rows }) => {
+    if (!rows || rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    lines.push(esc(title), headers.map(esc).join(','), ...rows.map((row) => headers.map((h) => esc(row[h])).join(',')), '');
+  });
+  if (lines.length === 0) return false;
+  const blob = new Blob([`﻿${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return true;
+}

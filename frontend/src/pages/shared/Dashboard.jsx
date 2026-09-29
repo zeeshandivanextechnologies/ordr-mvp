@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FiPlus, FiAlertTriangle, FiClock, FiPackage, FiTruck, FiAlertCircle, FiCheckCircle, FiDownload, FiPrinter } from 'react-icons/fi';
-import { exportToCSV, printPage } from '../../utils/exportUtils';
+import { exportToCSV, printPage, printReport, exportSectionsToCSV } from '../../utils/exportUtils';
 import '../../styles/member.css';
 import { NavLink, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -54,6 +54,21 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+
+  // Excel export is not part of the Basic plan (Growth and above, and the trial), same as Orders
+  const [planId, setPlanId] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get('/billing')
+      .then((res) => {
+        if (mounted) setPlanId(res.data?.subscription?.plan || null);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -130,17 +145,75 @@ export default function Dashboard() {
     cancelled: 'Cancelled',
   };
 
-  const handleExport = () => {
-    const data = filteredOrders.map((o, i) => ({
+  // Dashboard report (what is on screen for the selected tab): summary cards, recent orders, needs attention
+  const typeLabel = orderType === 'all' ? 'All Orders' : orderType === 'sales' ? 'Sales Orders' : 'Purchase Orders';
+  const reportRows = () => ({
+    summary: kpis.map((kpi) => ({ 'Metric': kpi.label, 'Value': kpi.value, 'Details': kpi.sub })),
+    orders: filteredOrders.map((o, i) => ({
       'Sr. No.': i + 1,
       'Customer/Supplier': o.customer,
       'PO': o.po,
       'Value': o.value,
       'Due Date': o.due,
-      'Status': statusLabels[o.status],
-    }));
-    exportToCSV(data, 'dashboard_orders');
+      'Status': statusLabels[o.status] || o.status,
+    })),
+    attention: attentionItems.map((item) => ({ 'Item': item.title, 'Details': item.desc })),
+  });
+
+  const handleExport = () => {
+    if (planId === 'basic') {
+      toast.info('Excel export is available on the Growth plan and above. Upgrade your plan in Billing.');
+      return;
+    }
+    if (!data) {
+      toast.info('The dashboard is still loading');
+      return;
+    }
+    const rows = reportRows();
+    exportSectionsToCSV([
+      { title: `Dashboard Summary (${typeLabel}) - ${today}`, rows: rows.summary },
+      { title: 'Recent Orders', rows: rows.orders },
+      { title: 'Needs Attention', rows: rows.attention },
+    ], `dashboard_${orderType}`);
   };
+
+  const attentionColors = { overdue: '#c62828', partial: '#f57f17', 'no-update': '#1565c0' };
+  const handlePrint = () => {
+    if (!data) {
+      toast.info('The dashboard is still loading');
+      return;
+    }
+    const rows = reportRows();
+    const statusSlugs = Object.fromEntries(Object.entries(statusLabels).map(([slug, label]) => [label, slug]));
+    printReport('Dashboard Report', {
+      meta: [typeLabel, today],
+      kpis: kpis.map((kpi) => ({ label: kpi.label, value: kpi.value, sub: kpi.sub, color: kpi.color })),
+      sections: [
+        {
+          title: 'Recent Orders',
+          rows: rows.orders,
+          empty: 'No orders yet',
+          tableOptions: { badgeColumn: 'Status', badgeOf: (label) => statusSlugs[label], strongColumns: ['PO'] },
+        },
+        {
+          title: 'Needs Attention',
+          items: attentionItems.map((item) => ({ title: item.title, desc: item.desc, color: attentionColors[item.type] })),
+          empty: 'All caught up - nothing needs attention right now',
+        },
+      ],
+    });
+  };
+
+  // While the dashboard loads, one loader takes the place of the whole page content
+  // if (loading) {
+  //   return (
+  //     <div className="d-flex justify-content-center align-items-center" style={{ height: '70vh' }} role="status">
+  //       <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+  //         <span className="visually-hidden">Loading...</span>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <>
@@ -158,6 +231,12 @@ export default function Dashboard() {
           <button className="thm-btn outline fz-14 p-2" onClick={() => printPage('Dashboard Report')}>
             <FiPrinter /> Print
           </button> */}
+          <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+            <FiDownload /> Export
+          </button>
+          <button className="thm-btn outline fz-14 p-2" onClick={handlePrint}>
+            <FiPrinter /> Print
+          </button>
           <NavLink to="/app/orders/add" className="thm-btn p-2 fz-14">
             <FiPlus /> Add Order
           </NavLink>
