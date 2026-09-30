@@ -424,8 +424,10 @@ export const extractOrderUpdate = async ({ companyName, from, subject, body, cla
 
 // Header/label names in English plus common Hindi words
 const LABELS = {
-  po_number: /^((p\.?\s?o\.?|purchase\s+order|order|sales\s+order|so)\s*(no\.?|number|#|ref(erence)?|id)|ऑर्डर\s*(नं\.?|नंबर|संख्या))\s*[:#-]?$/i,
-  party_name: /^((customer|supplier|vendor|buyer|party|client|bill\s+to|sold\s+to|consignee)(\s+name)?|ग्राहक|आपूर्तिकर्ता|पार्टी)\s*[:-]?$/i,
+  // Also "PO Ref No", "P.O. Reference Number", "Order Ref. No."
+  po_number: /^((p\.?\s?o\.?|purchase\s+order|order|sales\s+order|so)\s*(no\.?|number|#|ref(erence)?|id)|(p\.?\s?o\.?|purchase\s+order|order|sales\s+order)\s*ref(erence)?\.?\s*(no\.?|number|#)|ऑर्डर\s*(नं\.?|नंबर|संख्या))\s*[:#-]?$/i,
+  // Also "Buyer's Name", "Name of Customer", "Customer / Supplier"
+  party_name: /^((customer|supplier|vendor|buyer|party|client|bill\s+to|sold\s+to|consignee)('?s)?(\s+name)?|name\s+of\s+(the\s+)?(customer|supplier|vendor|buyer|party|client)|customer\s*\/\s*supplier|ग्राहक|आपूर्तिकर्ता|पार्टी)\s*[:-]?$/i,
   order_date: /^(((po|order)\s+)?date|दिनांक|तारीख)\s*[:-]?$/i,
   required_delivery_date: /^((required|delivery|due|expected\s+delivery)(\s+(date|by))?|डिलीवरी\s*(तिथि|तारीख))\s*[:-]?$/i,
   delivery_location: /^(delivery\s+(address|location|place)|ship\s+to|deliver\s+to|consignee\s+address|place\s+of\s+delivery)\s*[:-]?$/i,
@@ -443,6 +445,12 @@ const COLUMNS = {
 };
 
 const cellText = (v) => (v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim());
+
+// "Qty (MT)" / "Quantity [Kg]" header -> "MT" / "Kg" (used when there is no Unit column)
+const headerUnit = (header) => {
+  const m = String(header || '').match(/[([]\s*([A-Za-z][A-Za-z.]*)\s*[)\]]\s*$/);
+  return m ? m[1] : null;
+};
 
 // "10 MT" -> quantity "10", unit "MT"
 const splitQuantity = (value) => {
@@ -465,12 +473,14 @@ export const parseStructuredRows = (rows) => {
     if (items.length === 0 && productCol !== -1 && qtyCol !== -1) {
       const col = (key) => row.findIndex((c, i) => i !== productCol && COLUMNS[key].test(c));
       const map = { product: productCol, quantity: qtyCol, sku: col('sku'), unit: col('unit'), unit_price: col('unit_price'), total: col('total') };
+      const qtyHeaderUnit = headerUnit(row[qtyCol]);
       const parsed = [];
       for (let k = r + 1; k < rows.length; k += 1) {
         const line = (rows[k] || []).map(cellText);
         const product = line[map.product];
         if (!product || /^(total|grand\s+total|sub\s*total|कुल)/i.test(product)) break;
         const qty = map.unit >= 0 ? { quantity: line[map.quantity], unit: line[map.unit] } : splitQuantity(line[map.quantity]);
+        if (!qty.unit && qtyHeaderUnit) qty.unit = qtyHeaderUnit;
         parsed.push({
           product,
           sku: map.sku >= 0 ? line[map.sku] : null,
@@ -525,13 +535,16 @@ const LIST_COLUMNS = {
 };
 
 // Detects a list of several orders in one sheet. Returns an array of raw orders
-// (same shape as the AI output) when 2+ different PO numbers are found, else null.
-export const parseOrderList = (rows) => {
+// (same shape as the AI output) when at least minOrders (default 2) different PO numbers are found, else null.
+// requireItemColumns: only accept a header that also has Product and Quantity columns (a real order table)
+export const parseOrderList = (rows, { minOrders = 2, requireItemColumns = false } = {}) => {
   for (let r = 0; r < rows.length; r += 1) {
     const header = (rows[r] || []).map(cellText);
     const find = (key) => header.findIndex((c) => LIST_COLUMNS[key].test(c));
     const map = Object.fromEntries(Object.keys(LIST_COLUMNS).map((k) => [k, find(k)]));
     if (map.po_number === -1 || (map.party_name === -1 && map.product === -1)) continue;
+    if (requireItemColumns && (map.product === -1 || map.quantity === -1)) continue;
+    const qtyHeaderUnit = map.quantity >= 0 ? headerUnit(header[map.quantity]) : null;
 
     const orders = new Map();
     for (let k = r + 1; k < rows.length; k += 1) {
@@ -555,6 +568,7 @@ export const parseOrderList = (rows) => {
       const product = get('product');
       if (product && product !== '—') {
         const qty = map.unit >= 0 ? { quantity: get('quantity'), unit: get('unit') } : splitQuantity(get('quantity'));
+        if (!qty.unit && qtyHeaderUnit) qty.unit = qtyHeaderUnit;
         orders.get(po).items.push({
           product,
           quantity: qty.quantity,
@@ -565,7 +579,7 @@ export const parseOrderList = (rows) => {
       }
     }
 
-    if (orders.size < 2) return null;
+    if (orders.size < minOrders) return null;
     return [...orders.values()].map((order) => {
       const fieldConfidence = {};
       for (const [key, value] of Object.entries(order)) {
@@ -619,6 +633,18 @@ export const readDocumentContent = async (filePath, ext) => {
       structured = parseStructuredRows(allRows);
       // A sheet listing several orders becomes one AI detection per order
       structured.orderList = parseOrderList(allRows);
+      // A register-style sheet with just one order ("PO Number | Customer | Product | Qty" columns):
+      // its PO / party / dates are columns, not "Label: value" cells, so take the missing ones from the row
+      if (!structured.orderList) {
+        const single = parseOrderList(allRows, { minOrders: 1, requireItemColumns: true });
+        if (single && single.length === 1) {
+          const [order] = single;
+          for (const key of ['po_number', 'party_name', 'order_date', 'required_delivery_date', 'currency', 'total_value']) {
+            if (!structured.fields[key] && order[key]) structured.fields[key] = order[key];
+          }
+          if (structured.items.length === 0 && order.items.length > 0) structured.items = order.items;
+        }
+      }
     } catch (err) {
       console.error(`${ext.toUpperCase()} parsing error:`, err.message);
     }
@@ -654,20 +680,28 @@ export const extractOrder = async ({ companyName, content, extraText, context })
 
   const structuredItems = structured ? cleanLineItems(structured.items) : [];
   const structuredItemsComplete = structuredItems.length > 0 && structuredItems.every((i) => i.product && i.quantity !== null);
-  const structuredComplete = structuredItemsComplete
-    && !!cleanString(structured.fields.po_number)
-    && !!cleanString(structured.fields.party_name);
+  const hasPo = structured ? !!cleanString(structured.fields.po_number) : false;
+  const hasParty = structured ? !!cleanString(structured.fields.party_name) : false;
+  const structuredComplete = structuredItemsComplete && hasPo && hasParty;
 
-  if (structuredComplete) {
+  // The sheet read directly (no AI). Incomplete sheets get a lower confidence and land in Needs Review
+  const directResult = (confidence) => {
     const fieldConfidence = { items: 95 };
     for (const key of Object.keys(structured.fields)) fieldConfidence[key] = 95;
     return {
-      raw: { ...structured.fields, items: structuredItems, field_confidence: fieldConfidence, confidence: 90 },
+      raw: { ...structured.fields, items: structuredItems, field_confidence: fieldConfidence, confidence },
       error: null,
       busy: false,
       usedAi: false,
     };
-  }
+  };
+
+  if (structuredComplete) return directResult(90);
+
+  // Uploaded sheet (no email text to add): items plus the PO or the party are enough to skip the AI.
+  // The missing field is left empty for the user to fill in during review.
+  const uploadOnly = !(extraText && extraText.trim());
+  if (uploadOnly && structuredItemsComplete && (hasPo || hasParty)) return directResult(60);
 
   const combinedText = [extraText, text].filter((t) => t && t.trim()).join('\n\n');
   if (!combinedText.trim() && !visionFile) {
@@ -681,6 +715,9 @@ export const extractOrder = async ({ companyName, content, extraText, context })
     file: visionFile,
     mimeType: visionMime,
   });
+  // AI failed or busy on an uploaded sheet whose items were read: keep what was read (Needs Review)
+  if (!data && uploadOnly && structuredItemsComplete) return directResult(60);
+
   // Items read directly from the sheet are exact; prefer them over the AI's reading
   if (data && structuredItemsComplete) {
     data.items = structuredItems;

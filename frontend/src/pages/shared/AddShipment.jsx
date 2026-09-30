@@ -120,10 +120,20 @@ export default function AddShipment() {
         toast.error('Enter the quantity for at least one item');
         return;
       }
+      // Over-allocation: tell the user before saving (the server checks again)
+      const tooMuch = orderItems.find((item) => Number(itemQty[item.id]) > remainingOf(item) + 1e-6);
+      if (tooMuch) {
+        toast.error(`${tooMuch.product}: only ${remainingOf(tooMuch).toLocaleString('en-IN')} ${tooMuch.unit || ''} left to ship`.trim());
+        return;
+      }
       const { quantity: _unused, ...rest } = formData;
       payload = { ...rest, lineItems };
     } else if (singleItem && !(Number(formData.quantity) > 0)) {
       toast.error('Quantity must be greater than 0');
+      return;
+    } else if (singleItem && Number(formData.quantity) > remainingOf(singleItem) + 1e-6) {
+      // Over-allocation: tell the user before saving (the server checks again)
+      toast.error(`Only ${remainingOf(singleItem).toLocaleString('en-IN')} ${singleItem.unit || ''} left to ship for this order`.replace(/\s+/g, ' '));
       return;
     }
     try {

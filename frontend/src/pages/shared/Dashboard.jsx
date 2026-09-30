@@ -130,6 +130,8 @@ export default function Dashboard() {
     type: attentionStyle[item.type]?.dot || 'no-update',
     icon: attentionStyle[item.type]?.icon || <FiClock size={18} color="#1565c0" />,
   }));
+  // The dashboard shows the most urgent few; the rest are on the Alerts page
+  const attentionMore = Math.max((data?.needsAttentionTotal ?? attentionItems.length) - attentionItems.length, 0);
 
   const statusLabels = {
     received: 'Received',
@@ -247,6 +249,15 @@ export default function Dashboard() {
 
      </div>
 
+      {/* While the dashboard loads, one loader takes the place of the page content below the header */}
+      {loading ? (
+        <div className="d-flex justify-content-center align-items-center" style={{ height: '70vh' }} role="status">
+          <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="row">
         {kpis.map((kpi, idx) => (
           <div className="col-lg-4 col-md-6 col-sm-12 mb-3" key={idx}>
@@ -279,7 +290,7 @@ export default function Dashboard() {
       </div>
 
       <div className="row ">
-        <div className="col-12 col-lg-6 mb-3">
+        <div className="col-md-6 col-sm-12 col-lg-6 mb-3">
           <div className="member-card">
             <div className="member-card-header">
               <h5>Recent Orders</h5>
@@ -327,13 +338,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="col-12 col-lg-6">
+        <div className="col-md-6 col-sm-12 col-lg-6">
           <div className="member-card">
             <div className="member-card-header">
               <h5>Needs Attention</h5>
 
               <div>
-                <NavLink to="#" className="view-all-btn">View All</NavLink>
+                <NavLink to="/app/alerts" className="view-all-btn">View All</NavLink>
               </div>
             </div>
             <div className="member-card-body py-0">
@@ -348,21 +359,40 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-              {attentionItems.map((item, idx) => (
-                <div className="attention-item" key={idx}>
-                  <div className={`attention-dot ${item.type}`}>
-                    {item.icon}
+              {attentionItems.map((item, idx) => {
+                const content = (
+                  <>
+                    <div className={`attention-dot ${item.type}`}>
+                      {item.icon}
+                    </div>
+                    <div className="attention-info">
+                      <h6>{item.title}</h6>
+                      <p>{item.desc}</p>
+                    </div>
+                  </>
+                );
+                // Each entry opens the order / shipment / inbox it is about
+                return item.link ? (
+                  <Link to={item.link} className="attention-item attention-link" key={idx}>
+                    {content}
+                  </Link>
+                ) : (
+                  <div className="attention-item" key={idx}>
+                    {content}
                   </div>
-                  <div className="attention-info">
-                    <h6>{item.title}</h6>
-                    <p>{item.desc}</p>
-                  </div>
+                );
+              })}
+              {attentionMore > 0 && (
+                <div className="attention-more">
+                  +{attentionMore} more - <Link to="/app/alerts" className="view-all-btn fz-14">View all alerts</Link>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
       </div>
+      </>
+      )}
     </>
   );
 }

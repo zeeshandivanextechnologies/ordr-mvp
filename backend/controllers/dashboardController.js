@@ -6,7 +6,8 @@ import { getPlanContext, historyCondition } from '../services/planGuard.js';
 const DEFAULT_DUE_SOON_DAYS = 1;
 const DEFAULT_STALE_DAYS = 5;
 const AI_REVIEW_HOURS = 24;
-const MAX_REFERENCES = 3;
+// How many Needs Attention entries the dashboard shows (the rest are on the Alerts page)
+const MAX_ATTENTION_ITEMS = 5;
 
 const CLOSED = `('delivered', 'cancelled')`;
 
@@ -17,9 +18,60 @@ const LAST_ACTIVITY_SQL = `GREATEST(
   COALESCE((SELECT MAX(te.created_at) FROM tracking_events te WHERE te.order_id = o.id), o.updated_at)
 )`;
 
-const refs = (rows) => {
-  const list = rows.slice(0, MAX_REFERENCES).map((r) => r.po_number || 'Unnamed');
-  return rows.length > MAX_REFERENCES ? `${list.join(', ')} +${rows.length - MAX_REFERENCES} more` : list.join(', ');
+// Per-order quantities and main material for the Needs Attention rows.
+// unit is only set when every line uses the same unit (otherwise quantities are shown without one)
+const ITEMS_SQL = `
+  LEFT JOIN (
+    SELECT order_id,
+           SUM(quantity) AS qty, SUM(dispatched) AS dispatched, SUM(delivered) AS delivered,
+           COUNT(*)::int AS item_count,
+           CASE WHEN COUNT(DISTINCT LOWER(TRIM(unit))) = 1 THEN MIN(unit) END AS unit,
+           (ARRAY_AGG(product ORDER BY created_at, id))[1] AS product
+    FROM order_items GROUP BY order_id
+  ) q ON q.order_id = o.id`;
+const ORDER_FIELDS = `o.id, o.party_name, o.po_number, o.order_type,
+  q.qty, q.dispatched, q.delivered, q.item_count, q.unit, q.product`;
+
+const fmtNum = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const qtyText = (n, unit) => `${fmtNum(n)}${unit ? ` ${unit}` : ''}`;
+const days = (n) => `${n} day${n === 1 ? '' : 's'}`;
+const poText = (r) => `PO ${r.po_number || '—'}`;
+
+// "5 MT Chemical A" / "Chemical A +2 more"
+// withQty = false when the detail text already shows the quantities
+const materialText = (r, withQty = true) => {
+  if (!r.product) return null;
+  const count = Number(r.item_count) || 0;
+  if (count > 1) return `${r.product} +${count - 1} more`;
+  return withQty && r.qty != null ? `${qtyText(r.qty, r.unit)} ${r.product}` : r.product;
+};
+
+const orderEntry = (type, label, r, detail, withQty = true) => ({
+  type,
+  orderId: r.id,
+  link: `/app/orders/${r.id}`,
+  party: r.party_name || null,
+  po: r.po_number || null,
+  title: `${label} – ${r.party_name || 'Unknown party'}`,
+  desc: [poText(r), materialText(r, withQty), detail].filter(Boolean).join(' · '),
+});
+
+// Takes entries from each rule in turn so every kind of problem gets a place on the dashboard
+const pickEntries = (groups, max) => {
+  const picked = groups.map(() => []);
+  let taken = 0;
+  for (let round = 0; taken < max; round += 1) {
+    let added = false;
+    groups.forEach((g, i) => {
+      if (taken < max && g[round]) {
+        picked[i].push(g[round]);
+        taken += 1;
+        added = true;
+      }
+    });
+    if (!added) break;
+  }
+  return picked.flat();
 };
 
 // GET /dashboard?order_type=all|sales|purchase
@@ -89,31 +141,35 @@ export const getDashboard = async (req, res, next) => {
 
     // ---------- Needs Attention (Module 22 rules) ----------
     const overdueRows = (await query(
-      `SELECT o.po_number FROM orders o
+      `SELECT ${ORDER_FIELDS}, (${today} - o.required_delivery_date)::int AS days_overdue
+       FROM orders o ${ITEMS_SQL}
        WHERE ${base} AND LOWER(o.status) NOT IN ${CLOSED} AND o.required_delivery_date < ${today}
        ORDER BY o.required_delivery_date`,
       params
     )).rows;
 
     const dueSoonRows = (await query(
-      `SELECT o.po_number FROM orders o
+      `SELECT ${ORDER_FIELDS}, (o.required_delivery_date - ${today})::int AS days_left
+       FROM orders o ${ITEMS_SQL}
        WHERE ${base} AND LOWER(o.status) NOT IN ${CLOSED}
          AND o.required_delivery_date BETWEEN ${today} AND ${today} + ${DUE_SOON_DAYS}
        ORDER BY o.required_delivery_date`,
       params
     )).rows;
 
+    // Partly dispatched or partly delivered: something has moved but not everything is delivered yet
     const partialRows = (await query(
-      `SELECT o.po_number FROM orders o
-       JOIN (SELECT order_id, SUM(quantity) AS qty, SUM(delivered) AS delivered FROM order_items GROUP BY order_id) q
-         ON q.order_id = o.id
-       WHERE ${base} AND LOWER(o.status) <> 'cancelled' AND q.delivered > 0 AND q.delivered < q.qty
+      `SELECT ${ORDER_FIELDS}
+       FROM orders o ${ITEMS_SQL}
+       WHERE ${base} AND LOWER(o.status) NOT IN ${CLOSED}
+         AND (q.dispatched > 0 OR q.delivered > 0) AND q.delivered < q.qty
        ORDER BY o.updated_at DESC`,
       params2
     )).rows;
 
     const staleRows = (await query(
-      `SELECT o.po_number FROM orders o
+      `SELECT ${ORDER_FIELDS}, EXTRACT(DAY FROM NOW() - ${LAST_ACTIVITY_SQL})::int AS idle_days
+       FROM orders o ${ITEMS_SQL}
        WHERE ${base} AND LOWER(o.status) NOT IN ${CLOSED}
          AND ${LAST_ACTIVITY_SQL} < NOW() - INTERVAL '${STALE_DAYS} days'
        ORDER BY ${LAST_ACTIVITY_SQL}`,
@@ -121,10 +177,12 @@ export const getDashboard = async (req, res, next) => {
     )).rows;
 
     const missingTrackingRows = (await query(
-      `SELECT DISTINCT o.po_number FROM shipments s JOIN orders o ON o.id = s.order_id
+      `SELECT s.id AS shipment_id, s.shipment_number, o.id, o.party_name, o.po_number
+       FROM shipments s JOIN orders o ON o.id = s.order_id
        WHERE ${base} AND LOWER(s.status) IN ('dispatched', 'in-transit', 'delayed')
          AND COALESCE(TRIM(s.lr_number), '') = '' AND COALESCE(TRIM(s.awb_number), '') = ''
-         AND COALESCE(TRIM(s.gr_number), '') = ''`,
+         AND COALESCE(TRIM(s.gr_number), '') = ''
+       ORDER BY s.updated_at DESC`,
       params2
     )).rows;
 
@@ -137,26 +195,51 @@ export const getDashboard = async (req, res, next) => {
     );
 
     const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-    const needsAttention = [];
-    if (overdueRows.length) {
-      needsAttention.push({ type: 'overdue', title: `${plural(overdueRows.length, 'order', 'orders')} overdue`, desc: `${refs(overdueRows)} past due date` });
-    }
-    if (dueSoonRows.length) {
-      needsAttention.push({ type: 'due-soon', title: `${plural(dueSoonRows.length, 'order', 'orders')} due soon`, desc: `${refs(dueSoonRows)} due within ${DUE_SOON_DAYS} day${DUE_SOON_DAYS > 1 ? 's' : ''}` });
-    }
-    if (partialRows.length) {
-      needsAttention.push({ type: 'partial', title: `${plural(partialRows.length, 'partial fulfilment', 'partial fulfilments')}`, desc: `${refs(partialRows)} awaiting balance quantity` });
-    }
-    if (staleRows.length) {
-      needsAttention.push({ type: 'no-update', title: `${plural(staleRows.length, 'order', 'orders')} no update`, desc: `No status change in last ${STALE_DAYS} days: ${refs(staleRows)}` });
-    }
-    if (missingTrackingRows.length) {
-      needsAttention.push({ type: 'missing-tracking', title: `${plural(missingTrackingRows.length, 'order', 'orders')} missing tracking number`, desc: `${refs(missingTrackingRows)} shipped without LR / AWB / GR number` });
-    }
+
+    // One entry per order, e.g. "Overdue – ABC Industries" / "PO ABC/1092 · 5 MT Chemical A · 2 days overdue"
+    const overdue = overdueRows.map((r) =>
+      orderEntry('overdue', 'Overdue', r, `${days(Number(r.days_overdue))} overdue`));
+
+    // "10 MT ordered · 6 MT dispatched · 4 MT pending"
+    const partial = partialRows.map((r) => {
+      const qty = Number(r.qty) || 0;
+      const dispatched = Math.min(Number(r.dispatched) || 0, qty);
+      const delivered = Number(r.delivered) || 0;
+      const pending = qty - dispatched;
+      const detail = pending > 0
+        ? `${qtyText(qty, r.unit)} ordered · ${qtyText(dispatched, r.unit)} dispatched · ${qtyText(pending, r.unit)} pending`
+        : `${qtyText(qty, r.unit)} ordered · ${qtyText(delivered, r.unit)} delivered · ${qtyText(qty - delivered, r.unit)} on the way`;
+      return orderEntry('partial', 'Partial Fulfilment', r, detail, false);
+    });
+
+    const stale = staleRows.map((r) =>
+      orderEntry('no-update', 'No Update', r, `No update for ${days(Number(r.idle_days))}`));
+
+    const dueSoon = dueSoonRows.map((r) => {
+      const left = Number(r.days_left);
+      return orderEntry('due-soon', 'Due Soon', r, left === 0 ? 'Due today' : left === 1 ? 'Due tomorrow' : `Due in ${days(left)}`);
+    });
+
+    const missingTracking = missingTrackingRows.map((r) => ({
+      type: 'missing-tracking',
+      orderId: r.id,
+      link: `/app/shipments/${r.shipment_id}`,
+      party: r.party_name || null,
+      po: r.po_number || null,
+      title: `Missing Tracking – ${r.party_name || 'Unknown party'}`,
+      desc: `${poText(r)} · ${r.shipment_number || 'Shipment'} has no LR / AWB / GR number`,
+    }));
+
+    const aiReview = [];
     if (aiPending.rows[0].count > 0) {
       const n = aiPending.rows[0].count;
-      needsAttention.push({ type: 'ai-review', title: `${plural(n, 'AI detection', 'AI detections')} pending review`, desc: `Waiting in the AI Order Inbox for more than ${AI_REVIEW_HOURS} hours` });
+      aiReview.push({ type: 'ai-review', link: '/app/ai-inbox', title: `${plural(n, 'AI detection', 'AI detections')} pending review`, desc: `Waiting in the AI Order Inbox for more than ${AI_REVIEW_HOURS} hours` });
     }
+
+    // Most urgent first; the full list is on the Alerts page
+    const attentionGroups = [overdue, partial, stale, dueSoon, missingTracking, aiReview];
+    const needsAttention = pickEntries(attentionGroups, MAX_ATTENTION_ITEMS);
+    const needsAttentionTotal = attentionGroups.reduce((sum, g) => sum + g.length, 0);
 
     const k = kpiResult.rows[0];
     const delivered = deliveredResult.rows[0];
@@ -176,6 +259,7 @@ export const getDashboard = async (req, res, next) => {
       },
       recentOrders: recentResult.rows,
       needsAttention,
+      needsAttentionTotal,
     });
   } catch (error) {
     next(error);

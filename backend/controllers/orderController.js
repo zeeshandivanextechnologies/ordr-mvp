@@ -76,6 +76,43 @@ export const updateOrder = async (req, res, next) => {
 
     await client.query('BEGIN');
 
+    // Module 17: quantities already shipped must still fit the edited order. Shipments are
+    // re-linked to items by product name, so a shipped product cannot be renamed or removed either.
+    // The order row is locked so a shipment cannot be added while this check runs.
+    await client.query('SELECT id FROM orders WHERE id = $1 FOR UPDATE', [id]);
+    const shippedItems = await client.query(
+      'SELECT product, unit, dispatched FROM order_items WHERE order_id = $1 AND dispatched > 0',
+      [id]
+    );
+    const productKey = (name) => String(name || '').trim().toLowerCase();
+    const shippedByProduct = new Map();
+    for (const row of shippedItems.rows) {
+      const key = productKey(row.product);
+      const entry = shippedByProduct.get(key) || { product: row.product, unit: row.unit, dispatched: 0 };
+      entry.dispatched += parseFloat(row.dispatched) || 0;
+      shippedByProduct.set(key, entry);
+    }
+    const newQtyByProduct = new Map();
+    for (const item of cleanItems) {
+      const key = productKey(item.product);
+      newQtyByProduct.set(key, (newQtyByProduct.get(key) || 0) + item.quantity);
+    }
+    for (const [key, shipped] of shippedByProduct) {
+      const shippedText = `${shipped.dispatched.toLocaleString('en-IN')}${shipped.unit ? ` ${shipped.unit}` : ''}`;
+      if (!newQtyByProduct.has(key)) {
+        throw Object.assign(
+          new Error(`"${shipped.product}" already has ${shippedText} dispatched, so it cannot be removed or renamed`),
+          { status: 400 }
+        );
+      }
+      if (newQtyByProduct.get(key) < shipped.dispatched - 1e-6) {
+        throw Object.assign(
+          new Error(`"${shipped.product}": ${shippedText} already dispatched, so the quantity cannot be less than ${shippedText}`),
+          { status: 400 }
+        );
+      }
+    }
+
     const updatedResult = await client.query(
       `UPDATE orders SET
          order_type = $1, party_name = $2, po_number = $3, order_date = $4,

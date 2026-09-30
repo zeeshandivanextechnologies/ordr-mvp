@@ -73,6 +73,13 @@ export default function Alerts() {
   });
 
   const openCount = alerts.filter((a) => a.status === 'open').length;
+  // Tab counts are for all alerts (not narrowed by search / severity), same as the Orders tabs
+  const tabCounts = {
+    all: alerts.length,
+    open: openCount,
+    resolved: alerts.filter((a) => a.status === 'resolved').length,
+    dismissed: alerts.filter((a) => a.status === 'dismissed').length,
+  };
 
   const updateStatus = async (alertId, action) => {
     setBusyId(alertId);
@@ -128,10 +135,7 @@ export default function Alerts() {
                 className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
               >
-                {tab.label}
-                {tab.key === 'open' && openCount > 0 && (
-                  <span className="alert-count-badge">{openCount}</span>
-                )}
+                {tab.label} ({tabCounts[tab.key]})
               </button>
             ))}
           </div>

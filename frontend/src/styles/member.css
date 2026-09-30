@@ -415,6 +415,22 @@
   margin: 0;
 }
 
+/* Needs Attention entry that opens its order / shipment */
+.attention-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.attention-link:hover .attention-info h6 {
+  color: var(--primary-color);
+}
+
+.attention-more {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+
 .view-all-btn {
   display: inline-block;
   font-size: 16px;

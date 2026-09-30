@@ -106,6 +106,8 @@ export default function AddOrder() {
             unit: i.unit || 'MT',
             unitPrice: String(i.unit_price ?? ''),
             total: String(i.total ?? ''),
+            // Already dispatched: the quantity cannot go below this and the product cannot be renamed / removed
+            shipped: Number(i.dispatched) || 0,
           }))
         );
         if (order.country) {
@@ -195,6 +197,14 @@ export default function AddOrder() {
     if (!formData.partyName || !formData.poNumber) {
       setError('Customer/Supplier Name and PO Number are required.');
       toast.error('Customer/Supplier Name and PO Number are required.');
+      return;
+    }
+    // Editing: a line cannot be less than what has already been dispatched (the server checks again)
+    const underShipped = lines.find((line) => line.shipped > 0 && !(parseFloat(line.qty) >= line.shipped - 1e-6));
+    if (underShipped) {
+      const msg = `${underShipped.product}: ${underShipped.shipped.toLocaleString('en-IN')} ${underShipped.unit} already dispatched, so the quantity cannot be less than that.`;
+      setError(msg);
+      toast.error(msg);
       return;
     }
     try {
@@ -410,7 +420,16 @@ export default function AddOrder() {
                         <td>{idx + 1}</td>
                         <td>
                           <div className='custom-frm-bx mb-0'>
-                            <input type="text" className='form-control' value={line.product} onChange={(e) => updateLine(idx, 'product', e.target.value)} placeholder="Product name" />
+                            <input
+                              type="text"
+                              className='form-control'
+                              value={line.product}
+                              onChange={(e) => updateLine(idx, 'product', e.target.value)}
+                              placeholder="Product name"
+                              readOnly={line.shipped > 0}
+                              title={line.shipped > 0 ? 'Already dispatched - the product name cannot be changed' : undefined}
+                              style={line.shipped > 0 ? { background: '#f9f9f9' } : undefined}
+                            />
                           </div>
                           </td>
                         <td>
@@ -426,8 +445,13 @@ export default function AddOrder() {
                           </td>
                         <td>
                           <div className='custom-frm-bx mb-0'>
-                            <input type="number" className='form-control' value={line.qty} onChange={(e) => updateLine(idx, 'qty', e.target.value)} placeholder="0" />
+                            <input type="number" className='form-control' value={line.qty} onChange={(e) => updateLine(idx, 'qty', e.target.value)} placeholder="0" min={line.shipped > 0 ? line.shipped : undefined} />
                           </div>
+                          {line.shipped > 0 && (
+                            <small className="text-secondary d-block mt-1" style={{ whiteSpace: 'nowrap' }}>
+                              Dispatched: {line.shipped.toLocaleString('en-IN')} {line.unit}
+                            </small>
+                          )}
                           </td>
                         <td>
                         <div className='custom-frm-bx mb-0'>
@@ -450,7 +474,7 @@ export default function AddOrder() {
                           </div>
                           </td>
                         <td>
-                          {lines.length > 1 && (
+                          {lines.length > 1 && !(line.shipped > 0) && (
                             <button className="remove-line-btn" onClick={() => removeLine(idx)}>
                               <FiTrash2 size={14} />
                             </button>
