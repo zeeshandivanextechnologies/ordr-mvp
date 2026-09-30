@@ -309,7 +309,13 @@ export default function Tracking() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={9} className="text-center py-4">Loading shipments...</td>
+                      <td colSpan={9} className="text-center py-4">
+                        <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
+      <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+        <span className="visually-hidden">Loading...</span>
+      </div>
+    </div>
+                      </td>
                     </tr>
                   )}
                   {!loading && filteredShipments.length === 0 && (
