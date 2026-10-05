@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { FiEye, FiChevronDown, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
@@ -28,6 +29,7 @@ export default function AIOrderInbox() {
   const [counts, setCounts] = useState({ New: 0, 'Needs Review': 0, Confirmed: 0, Ignored: 0 });
   const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
+  const [actionRect, setActionRect] = useState(null);
   const actionRef = useRef(null);
   const [updates, setUpdates] = useState([]);
   const [updateCounts, setUpdateCounts] = useState({ Pending: 0, Applied: 0, Ignored: 0 });
@@ -96,13 +98,18 @@ export default function AIOrderInbox() {
   }, [lastQuery, offset, reloadKey]);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (actionRef.current && !actionRef.current.contains(e.target)) {
-        setOpenAction(null);
-      }
+    const handleClickOutside = () => {
+      setOpenAction(null);
+    };
+    const handleScroll = () => {
+      setOpenAction(null);
     };
     document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, []);
 
   const filterOptions = [
@@ -386,15 +393,30 @@ export default function AIOrderInbox() {
                           </span>
                         </td>
                         <td>
-                          <div className="position-relative" ref={openAction === idx ? actionRef : undefined}>
+                          <div>
                             <button
                               className="action-dropdown-btn"
-                              onClick={(e) => { e.stopPropagation(); setOpenAction(openAction === idx ? null : idx); }}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (openAction === idx) {
+                                  setOpenAction(null);
+                                } else {
+                                  setOpenAction(idx);
+                                  setActionRect(e.currentTarget.getBoundingClientRect());
+                                }
+                              }}
                             >
                               Edit <FiChevronDown />
                             </button>
-                            {openAction === idx && (
-                              <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
+                            {openAction === idx && actionRect && createPortal(
+                              <div 
+                                className="order-dropdown-menu portal-dropdown-menu" 
+                                style={{ 
+                                  top: actionRect.bottom + 5,
+                                  right: window.innerWidth - actionRect.right 
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <Link to={`/app/ai-inbox/${order.id}/review`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                   <FiEye /> Review
                                 </Link>
@@ -406,7 +428,8 @@ export default function AIOrderInbox() {
                                     <FiTrash2 /> Delete
                                   </Link>
                                 )}
-                              </div>
+                              </div>,
+                              document.body
                             )}
                           </div>
                         </td>

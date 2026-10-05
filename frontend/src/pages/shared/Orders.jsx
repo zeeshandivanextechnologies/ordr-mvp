@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { FiPlus, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiEye, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
 import { exportToCSV, printPage, printTable } from '../../utils/exportUtils';
@@ -25,6 +26,7 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
+  const [actionRect, setActionRect] = useState(null);
   const dropdownRef = useRef(null);
   const actionRef = useRef(null);
   const [offset, setOffset] = useState(0);
@@ -72,7 +74,7 @@ export default function Orders() {
       .then((res) => {
         if (mounted) setPlanId(res.data?.subscription?.plan || null);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       mounted = false;
     };
@@ -80,15 +82,26 @@ export default function Orders() {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+      // actionRef is the "New Order" header button
+      if (actionRef.current && !actionRef.current.contains(e.target)) {
         setShowDropdown(false);
       }
-      if (actionRef.current && !actionRef.current.contains(e.target)) {
-        setOpenAction(null);
-      }
+      // Since portal is appended to body, any click outside the button closes the action dropdown
+      // (The button has e.stopPropagation())
+      setOpenAction(null);
     };
+
+    const handleScroll = () => {
+      setOpenAction(null);
+      setShowDropdown(false);
+    };
+
     document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true); // capture scroll on any element
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, []);
 
   // Every status the order status engine can set, so no order is hidden by the filter
@@ -144,6 +157,7 @@ export default function Orders() {
       id: o.id,
       customer: o.party_name || '—',
       po: o.po_number || '—',
+      poDate: formatDate(o.po_date || o.order_date || o.created_at),
       material: o.material ? `${o.material}${itemCount > 1 ? ` +${itemCount - 1} more` : ''}` : '—',
       qty: mixedUnits
         ? `${itemCount} items`
@@ -170,8 +184,9 @@ export default function Orders() {
     const allOrders = (res.data.orders || []).map(toDisplayOrder);
     return allOrders.map((o, i) => ({
       'Sr No.': i + 1,
-      'Customer/Supplier': o.customer,
-      'PO': o.po,
+      [activeTab === 'sales' ? 'Customer Name' : 'Supplier Name']: o.customer,
+      'PO Number': o.po,
+      'PO Date': o.poDate,
       'Material': o.material,
       'Quantity': o.qty,
       'Order Value': o.value,
@@ -201,7 +216,7 @@ export default function Orders() {
         meta,
         badgeColumn: 'Status',
         badgeOf: (label) => statusSlugs[label],
-        strongColumns: ['PO'],
+        strongColumns: ['PO Number'],
       });
     } catch {
       toast.error('Failed to print orders');
@@ -244,42 +259,42 @@ export default function Orders() {
       <div className='row'>
         <div className='col-lg-12'>
           <div className="member-page-header mb-2">
-        <div>
-          <h2>Orders</h2>
-          <p>Manage your sales and purchase orders</p>
-        </div>
-        <div className="d-flex gap-2">
-          {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+            <div>
+              <h2>Orders</h2>
+              <p>Manage your sales and purchase orders</p>
+            </div>
+            <div className="d-flex gap-2">
+              {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
             <FiDownload /> Export
           </button>
           <button className="thm-btn outline fz-14 p-2" onClick={() => printPage(`${activeTab === 'sales' ? 'Sales' : 'Purchase'} Orders`, '.member-card .table-responsive')}>
             <FiPrinter /> Print
           </button> */}
 
-          <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
-            <FiDownload /> Export
-          </button>
-          <button className="thm-btn outline fz-14 p-2" onClick={handlePrint} disabled={printing}>
-            <FiPrinter /> {printing ? 'Preparing...' : 'Print'}
-          </button>
+              <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
+                <FiDownload /> Export
+              </button>
+              <button className="thm-btn outline fz-14 p-2" onClick={handlePrint} disabled={printing}>
+                <FiPrinter /> {printing ? 'Preparing...' : 'Print'}
+              </button>
 
-          <div className="position-relative" ref={actionRef}>
-            <button className="thm-btn fz-14 p-2" onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}>
-              <FiPlus /> New Order <FiChevronDown />
-            </button>
-            {showDropdown && (
-              <div className="order-dropdown-menu">
-                <Link to="/app/orders/add" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
-                  <FiEdit2 /> Add Manually
-                </Link>
-                <Link to="/app/orders/upload" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
-                  <FiUpload /> Upload PO
-                </Link>
+              <div className="position-relative" ref={actionRef}>
+                <button className="thm-btn fz-14 p-2" onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}>
+                  <FiPlus /> New Order <FiChevronDown />
+                </button>
+                {showDropdown && (
+                  <div className="order-dropdown-menu">
+                    <Link to="/app/orders/add" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
+                      <FiEdit2 /> Add Manually
+                    </Link>
+                    <Link to="/app/orders/upload" className="order-dropdown-item" onClick={() => setShowDropdown(false)}>
+                      <FiUpload /> Upload PO
+                    </Link>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
-      </div>
 
         </div>
 
@@ -288,19 +303,19 @@ export default function Orders() {
       <div className='row'>
         <div className='col-lg-12'>
           <div className="member-tabs">
-        <button
-          className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sales')}
-        >
-          Sales Orders ({salesCount})
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'purchase' ? 'active' : ''}`}
-          onClick={() => setActiveTab('purchase')}
-        >
-          Purchase Orders ({purchaseCount})
-        </button>
-      </div>
+            <button
+              className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sales')}
+            >
+              Sales Orders ({salesCount})
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'purchase' ? 'active' : ''}`}
+              onClick={() => setActiveTab('purchase')}
+            >
+              Purchase Orders ({purchaseCount})
+            </button>
+          </div>
 
         </div>
 
@@ -309,113 +324,131 @@ export default function Orders() {
       <div className='row'>
         <div className='col-lg-12'>
           <div className="search-filter-bar">
-        <div className="custom-frm-bx flex-grow-1">
-          <input type="text" className='form-control' placeholder="Search by customer, PO, material, LR / tracking no..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-        </div>
-        <div className='custom-frm-bx'>
-          <select
-          className="form-select"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          {filterOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        </div>
-      </div>
+            <div className="custom-frm-bx flex-grow-1">
+              <input type="text" className='form-control' placeholder="Search by customer, PO, material, LR / tracking no..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
+            <div className='custom-frm-bx'>
+              <select
+                className="form-select"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                {filterOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
         </div>
 
       </div>
 
       <div className='row'>
-       <div className='col-lg-12'>
-         <div className="member-card">
-        <div className="table-responsive">
-          <table className="member-table">
-            <thead>
-              <tr>
-                <th>Sr No.</th>
-                <th>Customer/Supplier</th>
-                <th>PO</th>
-                <th>Material</th>
-                <th>Quantity</th>
-                <th>Order Value</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="9" className="text-center py-4">
-                    <div className="d-flex justify-content-center align-items-center" style={{height : "200px"}}  role="status">
-      <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
-        <span className="visually-hidden">Loading...</span>
-      </div>
-    </div>
-                  </td>
-                </tr>
-              ) : filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan="9" className="text-center py-4">No orders found</td>
-                </tr>
-              ) : (
-                filteredOrders.map((order, idx) => (
-                <tr key={order.id}>
-                  <td>{offset + idx + 1}</td>
-                  <td>{order.customer}</td>
-                  <td className="po-number">{order.po}</td>
-                  <td>{order.material}</td>
-                  <td>{order.qty}</td>
-                  <td>{order.value}</td>
-                  <td>{order.due}</td>
-                  <td>
-                    <span className={`status-badge ${order.status}`}>
-                      {statusLabels[order.status]}
-                    </span>
-                  </td>
-                  <td>
-        <div className="position-relative" ref={dropdownRef}>
-                      <button
-                        className="action-dropdown-btn"
-                        onClick={(e) => { e.stopPropagation(); setOpenAction(openAction === idx ? null : idx); }}
-                      >
-                        Edit <LuChevronDown />
-                      </button>
-                      {openAction === idx && (
-                        <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
-                          <Link to={`/app/orders/${order.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
-                            <FiEye /> View Details
-                          </Link>
-                          {isAdmin && (
-                            <>
-                              <Link to="/app/orders/add" state={{ editId: order.id }} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
-                                <FiEdit2 /> Edit
-                              </Link>
-                              <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.po); }}>
-                                <FiTrash2 /> Delete
-                              </Link>
-                            </>
-                          )}
+        <div className='col-lg-12'>
+          <div className="member-card">
+            <div className="table-responsive">
+              <table className="member-table">
+                <thead>
+                  <tr>
+                    <th>Sr No.</th>
+                    <th>{activeTab === 'sales' ? 'Customer Name' : 'Supplier Name'}</th>
+                    <th>PO Number</th>
+                    <th>PO Date</th>
+                    <th>Material</th>
+                    <th>Quantity</th>
+                    <th>Order Value</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                  <td colSpan="10" className="text-center py-4">
+                    <div className="d-flex justify-content-center align-items-center" style={{ height: "200px" }} role="status">
+                          <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
+                            <span className="visually-hidden">Loading...</span>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <BootstrapPagination total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} disabled={loading} />
-      </div>
+                      </td>
+                    </tr>
+                  ) : filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="text-center py-4">No orders found</td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((order, idx) => (
+                      <tr key={order.id}>
+                        <td>{offset + idx + 1}</td>
+                        <td>{order.customer}</td>
+                        <td className="po-number">{order.po}</td>
+                        <td>{order.poDate}</td>
+                        <td>{order.material}</td>
+                        <td>{order.qty}</td>
+                        <td>{order.value}</td>
+                        <td>{order.due}</td>
+                        <td>
+                          <span className={`status-badge ${order.status}`}>
+                            {statusLabels[order.status]}
+                          </span>
+                        </td>
+                        <td>
+                          <div>
+                            <button
+                              className="action-dropdown-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (openAction === idx) {
+                                  setOpenAction(null);
+                                } else {
+                                  setOpenAction(idx);
+                                  setActionRect(e.currentTarget.getBoundingClientRect());
+                                }
+                              }}
+                            >
+                              Edit <LuChevronDown />
+                            </button>
+                            {openAction === idx && actionRect && createPortal(
+                              <div
+                                className="order-dropdown-menu portal-dropdown-menu"
+                                style={{
+                                  top: actionRect.bottom + 5,
+                                  right: window.innerWidth - actionRect.right
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Link to={`/app/orders/${order.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                                  <FiEye /> View Details
+                                </Link>
+                                {isAdmin && (
+                                  <>
+                                    <Link to="/app/orders/add" state={{ editId: order.id }} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
+                                      <FiEdit2 /> Edit
+                                    </Link>
+                                    <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); handleDelete(order.id, order.po); }}>
+                                      <FiTrash2 /> Delete
+                                    </Link>
+                                  </>
+                                )}
+                              </div>,
+                              document.body
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <BootstrapPagination total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} disabled={loading} />
+          </div>
 
-       </div>
+        </div>
       </div>
     </>
   );

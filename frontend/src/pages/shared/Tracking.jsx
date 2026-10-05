@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { FiChevronDown, FiEye, FiFileText, FiDownload, FiPrinter } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -37,6 +38,7 @@ export default function Tracking() {
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openAction, setOpenAction] = useState(null);
+  const [actionRect, setActionRect] = useState(null);
   const actionRef = useRef(null);
   const [offset, setOffset] = useState(0);
   const [total, setTotal] = useState(0);
@@ -113,13 +115,18 @@ export default function Tracking() {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (actionRef.current && !actionRef.current.contains(e.target)) {
-        setOpenAction(null);
-      }
+    const handleClickOutside = () => {
+      setOpenAction(null);
+    };
+    const handleScroll = () => {
+      setOpenAction(null);
     };
     document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, []);
 
   const filterOptions = [
@@ -338,22 +345,39 @@ export default function Tracking() {
                       </td>
                       <td>{shipment.lastUpdated}</td>
                       <td>
-                        <div className="position-relative" ref={openAction === idx ? actionRef : null}>
+                        <div>
                           <button
                             className="action-dropdown-btn"
-                            onClick={(e) => { e.stopPropagation(); setOpenAction(openAction === idx ? null : idx); }}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (openAction === idx) {
+                                setOpenAction(null);
+                              } else {
+                                setOpenAction(idx);
+                                setActionRect(e.currentTarget.getBoundingClientRect());
+                              }
+                            }}
                           >
                             View <FiChevronDown />
                           </button>
-                          {openAction === idx && (
-                            <div className="order-dropdown-menu" style={{  minWidth : "auto" }}>
+                          {openAction === idx && actionRect && createPortal(
+                            <div 
+                              className="order-dropdown-menu portal-dropdown-menu" 
+                              style={{  
+                                minWidth: "auto",
+                                top: actionRect.bottom + 5,
+                                right: window.innerWidth - actionRect.right
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <Link to={`/app/shipments/${shipment.id}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                 <FiEye /> View Details
                               </Link>
                               <Link to={`/app/orders/${shipment.orderId}`} className="order-dropdown-item" onClick={() => setOpenAction(null)}>
                                 <FiFileText /> View Order
                               </Link>
-                            </div>
+                            </div>,
+                            document.body
                           )}
                         </div>
                       </td>
