@@ -4,7 +4,7 @@
 // "Update PO #8192 -> Dispatched, LR 928721". Nothing changes until a user applies it.
 //
 // Matching priority (spec): 1. exact PO number  2. exact LR / AWB / GR number
-// 3. same Gmail thread as the email the order came from  4. customer/supplier + product.
+// 3. same Gmail thread as the email the order came from  4. customer/supplier + date + product.
 import { getClient, query } from '../config/database.js';
 import { extractOrderUpdate } from '../utils/orderExtraction.js';
 import { notifyCompany } from './notificationService.js';
@@ -26,6 +26,35 @@ const SQL_NORMALIZE_PO = (column) => `regexp_replace(regexp_replace(lower(COALES
 const SQL_NORMALIZE_REF = (column) => `regexp_replace(lower(COALESCE(${column}, '')), '[^a-z0-9]', '', 'g')`;
 const escapeLike = (value) => String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
 
+// Loose party-name comparison: "ABC" matches "ABC Industries Pvt Ltd" (either way round)
+const sameParty = (a, b) => {
+  const x = String(a || '').trim().toLowerCase();
+  const y = String(b || '').trim().toLowerCase();
+  return x.length >= 3 && y.length >= 3 && (x.includes(y) || y.includes(x));
+};
+
+// 'YYYY-MM-DD' of the update: the date stated in the email, else the day the email arrived
+const updateDay = (values, emailDate) => {
+  if (values.event_date) return values.event_date;
+  const d = emailDate ? new Date(emailDate) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+};
+const dayDistance = (a, b) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
+
+// Several open orders of the same party (and product): use the update's date to find the one it is about.
+// 1. Orders dated after the update cannot be meant.  2. Of the rest, the one due closest to the update
+// date wins, but only when it is clearly the closest. Returns an order id or null.
+const pickByDate = (candidates, day) => {
+  if (!day) return null;
+  const possible = candidates.filter((o) => !o.order_date || o.order_date <= day);
+  if (possible.length === 1) return possible[0].id;
+  if (possible.length < 2 || possible.some((o) => !o.required_delivery_date)) return null;
+  const ranked = possible
+    .map((o) => ({ id: o.id, distance: dayDistance(o.required_delivery_date, day) }))
+    .sort((a, b) => a.distance - b.distance);
+  return ranked[0].distance < ranked[1].distance ? ranked[0].id : null;
+};
+
 // The one shipment an update most likely refers to, when the email did not name it
 const pickActiveShipment = async (orderId, updateType) => {
   if (!SHIPMENT_UPDATE_TYPES.includes(updateType)) return null;
@@ -43,20 +72,26 @@ const pickActiveShipment = async (orderId, updateType) => {
  * Returns { orderId, shipmentId, method, confidence } or null.
  * confidence: 'high' (exact PO / tracking number), 'medium' (same thread), 'low' (ambiguous or party match).
  */
-export const matchOrderUpdate = async (companyId, values, { threadId, gmailMessageId } = {}) => {
+export const matchOrderUpdate = async (companyId, values, { threadId, gmailMessageId, emailDate } = {}) => {
   let match = null;
+  const party = values.party_name && values.party_name.trim().length >= 3 ? values.party_name.trim() : null;
 
   // 1. Exact PO number
   const po = normalizePo(values.po_number);
   if (po) {
     const orders = await query(
-      `SELECT id FROM orders
+      `SELECT id, party_name FROM orders
        WHERE company_id = $1 AND deleted_at IS NULL AND ${SQL_NORMALIZE_PO('po_number')} = $2
        ORDER BY updated_at DESC LIMIT 5`,
       [companyId, po]
     );
     if (orders.rows.length > 0) {
       match = { orderId: orders.rows[0].id, shipmentId: null, method: 'po', confidence: orders.rows.length === 1 ? 'high' : 'low' };
+      // The same PO number used by different customers/suppliers: the email's party picks the order
+      if (orders.rows.length > 1 && party) {
+        const samePartyOrders = orders.rows.filter((o) => sameParty(o.party_name, party));
+        if (samePartyOrders.length === 1) match = { ...match, orderId: samePartyOrders[0].id, confidence: 'high' };
+      }
     }
   }
 
@@ -107,22 +142,26 @@ export const matchOrderUpdate = async (companyId, values, { threadId, gmailMessa
     }
   }
 
-  // 4. Customer/supplier (+ product) among open orders: only a single clear hit counts
-  const party = values.party_name && values.party_name.trim().length >= 3 ? values.party_name.trim() : null;
+  // 4. Customer/supplier + date + product among open orders: only a single clear hit counts
   if (!match && party) {
     const product = values.product && values.product.trim().length >= 2 ? values.product.trim() : null;
     const orders = await query(
-      `SELECT o.id FROM orders o
+      `SELECT o.id, o.order_date::text AS order_date, o.required_delivery_date::text AS required_delivery_date
+       FROM orders o
        WHERE o.company_id = $1 AND o.deleted_at IS NULL
          AND LOWER(COALESCE(o.status, '')) NOT IN ('delivered', 'cancelled')
          AND (o.party_name ILIKE '%' || $2 || '%' OR $3 ILIKE '%' || o.party_name || '%')
          AND ($4::text IS NULL OR EXISTS (
            SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product ILIKE '%' || $4 || '%'))
-       ORDER BY o.updated_at DESC LIMIT 2`,
+       ORDER BY o.updated_at DESC LIMIT 20`,
       [companyId, escapeLike(party), party, product ? escapeLike(product) : null]
     );
-    if (orders.rows.length === 1) {
-      match = { orderId: orders.rows[0].id, shipmentId: null, method: 'party', confidence: 'low' };
+    // One candidate: as before. Several: the update's date narrows them down
+    const orderId = orders.rows.length === 1
+      ? orders.rows[0].id
+      : pickByDate(orders.rows, updateDay(values, emailDate));
+    if (orderId) {
+      match = { orderId, shipmentId: null, method: 'party', confidence: 'low' };
     }
   }
 
@@ -156,6 +195,7 @@ export const createUpdateSuggestion = async (message, companyName, classified, {
   const match = await matchOrderUpdate(message.company_id, values, {
     threadId: message.thread_id,
     gmailMessageId: message.message_id,
+    emailDate: message.received_at,
   });
 
   let suggestionId = null;

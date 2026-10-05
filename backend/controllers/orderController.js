@@ -727,6 +727,12 @@ export const uploadPO = async (req, res, next) => {
     const maxExtracts = await remainingQuota(companyId, 'aiExtractions');
     const result = await processDocument({ document, companyId, userId, maxExtracts });
 
+    await logAudit(req, 'document.uploaded', {
+      entityType: 'document',
+      entityId: document.id,
+      details: { file_name: document.file_name, file_type: document.file_type, detections_created: result.created },
+    });
+
     res.status(201).json({
       message: 'PO uploaded successfully',
       document,

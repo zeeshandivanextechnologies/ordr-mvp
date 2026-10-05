@@ -232,12 +232,12 @@ export default function Reports() {
                     <thead>
                       <tr>
                         <th>SR. No.</th>
-                        <th>Status</th>
+                        <th> Share</th>
                         <th>Orders</th>
                         <th>Sales</th>
                         <th>Purchase</th>
                         <th>Order Value</th>
-                        <th style={{ minWidth: 160 }}>Share</th></tr>
+                        <th style={{ minWidth: 160 }}>Status</th></tr>
                     </thead>
                     <tbody>
                       {data.byStatus.length === 0 && (

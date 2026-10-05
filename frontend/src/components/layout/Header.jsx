@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FiMenu, FiBell, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiChevronUp, FiBox, FiTruck } from 'react-icons/fi';
+import { FiMenu, FiBell, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiChevronUp, FiBox, FiTruck, FiX } from 'react-icons/fi';
 import { IoIosNotifications } from 'react-icons/io';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthProvider';
@@ -32,7 +32,10 @@ export default function Header({ toggleSidebar }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
   const notifRef = useRef(null);
+  // Phones: the search box is hidden in the header and opens as a full-width bar from the search icon
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -128,6 +131,7 @@ export default function Header({ toggleSidebar }) {
               key: `shipment-${sh.id}`,
               name: sh.shipment_number || 'Shipment',
               po: sh.po_number || '—',
+              material: sh.material || null,
               lr: tracking,
               route: sh.origin || sh.destination ? `${sh.origin || '—'} → ${sh.destination || '—'}` : null,
               status: sh.status || 'dispatched',
@@ -158,6 +162,7 @@ export default function Header({ toggleSidebar }) {
       }
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowSearchResults(false);
+        setMobileSearchOpen(false);
       }
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setShowNotifications(false);
@@ -166,6 +171,20 @@ export default function Header({ toggleSidebar }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Mobile search bar: focus it when opened, close it on page change
+  useEffect(() => {
+    if (mobileSearchOpen) searchInputRef.current?.focus();
+  }, [mobileSearchOpen]);
+  useEffect(() => {
+    setMobileSearchOpen(false);
+  }, [pathname]);
+
+  const closeMobileSearch = () => {
+    setMobileSearchOpen(false);
+    setShowSearchResults(false);
+    setSearchQuery('');
+  };
 
   const handleSearchFocus = () => {
     if (searchQuery.length > 0) {
@@ -182,9 +201,10 @@ export default function Header({ toggleSidebar }) {
     <div className="top-header">
       <div className="header-left">
         <FiMenu className="menu-toggle-btn" onClick={toggleSidebar} />
-        <div className="header-search-container" ref={searchRef}>
+        <div className={`header-search-container${mobileSearchOpen ? ' mobile-open' : ''}`} ref={searchRef}>
           <FiSearch className="header-search-icon" />
           <input 
+            ref={searchInputRef}
             type="text" 
             placeholder="Search orders, PO, shipments..." 
             className="header-search-input"
@@ -192,6 +212,9 @@ export default function Header({ toggleSidebar }) {
             onChange={handleSearchChange}
             onFocus={handleSearchFocus}
           />
+          {mobileSearchOpen && (
+            <FiX className="mobile-search-close" onClick={closeMobileSearch} aria-label="Close search" />
+          )}
           {showSearchResults && (
             <div className="search-results-dropdown">
               {searchQuery.trim().length < SEARCH_MIN_CHARS ? (
@@ -216,7 +239,7 @@ export default function Header({ toggleSidebar }) {
                       key={item.key}
                       to={item.link}
                       className="search-result-item"
-                      onClick={() => { setSearchQuery(''); setShowSearchResults(false); }}
+                      onClick={() => { setSearchQuery(''); setShowSearchResults(false); setMobileSearchOpen(false); }}
                     >
                       <div className={`search-result-icon ${item.type}`}>
                         {item.type === 'order' ? <FiBox /> : <FiTruck />}
@@ -225,6 +248,7 @@ export default function Header({ toggleSidebar }) {
                         <span className="search-result-name">{item.name}</span>
                         <span className="search-result-meta">
                           {item.type === 'order' ? 'Order' : 'Shipment'} • {item.po}
+                          {item.material && ` • ${item.material}`}
                           {item.lr && ` • ${item.lr}`}
                           {item.route && ` • ${item.route}`}
                         </span>
@@ -245,6 +269,12 @@ export default function Header({ toggleSidebar }) {
       </div>
       
       <div className="header-right">      
+        {/* Phones only (hidden on larger screens by CSS) */}
+        <FiSearch
+          className="mobile-search-toggle"
+          onClick={() => setMobileSearchOpen(true)}
+          aria-label="Search"
+        />
         <div className="notification-wrapper" ref={notifRef}>
           <IoIosNotifications className="notification-icons" onClick={() => setShowNotifications(!showNotifications)}/>
 

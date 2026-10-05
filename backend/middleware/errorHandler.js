@@ -17,6 +17,13 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(400).json({ error: err.message });
   }
 
+  // File upload limits (multer), e.g. a PO file over 10 MB: the user's file, not a server error
+  if (err.name === 'MulterError') {
+    return res.status(400).json({
+      error: err.code === 'LIMIT_FILE_SIZE' ? 'File is too large. The maximum size is 10 MB.' : err.message,
+    });
+  }
+
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
   });

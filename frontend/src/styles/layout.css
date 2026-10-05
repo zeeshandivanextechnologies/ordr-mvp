@@ -147,6 +147,49 @@
   }
 }
 
+/* Mobile search: an icon in the header opens the search box as a full-width bar below it */
+.mobile-search-toggle,
+.mobile-search-close {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .top-header {
+    position: relative;
+  }
+
+  .mobile-search-toggle {
+    display: block;
+    font-size: 22px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .header-search-container.mobile-open {
+    display: flex !important;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    background-color: #fff;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    z-index: 1001;
+  }
+
+  .header-search-container.mobile-open .mobile-search-close {
+    display: block;
+    flex-shrink: 0;
+    font-size: 18px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .header-search-container.mobile-open .search-results-dropdown {
+    min-width: 0;
+  }
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -459,11 +502,18 @@
   }
 }
 
+/* Phones: the notification box opens just below the header across the screen width,
+   so it never runs off the edge whatever the screen size (the header stays at the top). */
 @media (max-width: 767px) {
-.notification-dropdown{
-  top: calc(100% + 15px);
-    right: -100px;
-    width: 300px;
-}
+  .notification-dropdown {
+    position: fixed;
+    top: 71px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
 
+  .notification-dropdown-list {
+    max-height: 40vh;
+  }
 }

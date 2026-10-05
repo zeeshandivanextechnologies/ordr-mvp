@@ -179,7 +179,7 @@ export default function ShipmentDetail() {
                       { label: 'Customer / Supplier', value: shipment.party_name || '—' },
                       {
                         label: 'Order PO',
-                        value: <Link to={`/app/orders/${shipment.order_id}`}>{shipment.po_number || 'View Order'}</Link>,
+                        value: <Link to={`/app/orders/${shipment.order_id}`} className='view-all-btn'>{shipment.po_number || 'View Order'}</Link>,
                       },
                       { label: 'Quantity', value: quantity },
                       { label: 'Items', value: shipmentItems.length > 1 ? shipmentItems.map(lineText).join(', ') : shipment.items || '—' },

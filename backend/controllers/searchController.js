@@ -1,6 +1,6 @@
 // Module 25: global header search across orders and shipments of the user's company.
 // Matches PO / order number, customer / supplier, material / SKU, shipment number
-// and LR / AWB / GR tracking numbers. Results say whether they are an order or a shipment.
+// and LR / AWB / GR tracking numbers (shipments also by the material they carry). Results say whether they are an order or a shipment.
 import { query } from '../config/database.js';
 import { trackEvent } from '../utils/analytics.js';
 import { getPlanContext, historyCondition } from '../services/planGuard.js';
@@ -43,7 +43,11 @@ export const globalSearch = async (req, res, next) => {
 
     const shipments = await query(
       `SELECT s.id, s.order_id, s.shipment_number, s.lr_number, s.awb_number, s.gr_number,
-              s.origin, s.destination, s.status, o.po_number, o.party_name
+              s.origin, s.destination, s.status, o.po_number, o.party_name,
+              COALESCE(
+                (SELECT si.product FROM shipment_items si WHERE si.shipment_id = s.id ORDER BY si.created_at, si.id LIMIT 1),
+                (SELECT oi.product FROM order_items oi WHERE oi.order_id = s.order_id ORDER BY oi.created_at, oi.id LIMIT 1)
+              ) AS material
        FROM shipments s
        JOIN orders o ON o.id = s.order_id
        WHERE s.company_id = $1 AND o.deleted_at IS NULL AND ${historyCondition(planCtx)}
@@ -54,6 +58,17 @@ export const globalSearch = async (req, res, next) => {
            OR s.gr_number ILIKE $2
            OR o.po_number ILIKE $2
            OR o.party_name ILIKE $2
+           -- Material: the items this shipment carries (or its free-text items field)
+           OR s.items ILIKE $2
+           OR EXISTS (SELECT 1 FROM shipment_items si WHERE si.shipment_id = s.id AND si.product ILIKE $2)
+           -- Older shipments without per-item lines: the order's products
+           OR (
+             NOT EXISTS (SELECT 1 FROM shipment_items si WHERE si.shipment_id = s.id)
+             AND EXISTS (
+               SELECT 1 FROM order_items oi
+               WHERE oi.order_id = s.order_id AND (oi.product ILIKE $2 OR oi.sku ILIKE $2)
+             )
+           )
          )
        ORDER BY s.updated_at DESC
        LIMIT ${LIMIT}`,

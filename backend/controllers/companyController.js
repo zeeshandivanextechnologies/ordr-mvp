@@ -1,4 +1,8 @@
 import { query, getClient } from '../config/database.js';
+import { logAudit } from '../utils/audit.js';
+
+// Company settings recorded in the audit log when they change (Module 35)
+const AUDITED_COMPANY_FIELDS = ['name', 'industry', 'country', 'timezone', 'tracking_preferences', 'due_soon_days', 'stale_days'];
 
 export const getCompany = async (req, res) => {
   try {
@@ -51,6 +55,9 @@ export const updateCompany = async (req, res) => {
       return res.status(400).json({ error: dueSoon.error || stale.error });
     }
 
+    // Previous values, so the audit log can say what changed
+    const before = await query(`SELECT ${AUDITED_COMPANY_FIELDS.join(', ')} FROM companies WHERE id = $1`, [company_id]);
+
     const result = await query(
       `UPDATE companies 
        SET name = COALESCE($1, name), 
@@ -68,6 +75,17 @@ export const updateCompany = async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const previous = before.rows[0] || {};
+    const changes = {};
+    for (const field of AUDITED_COMPANY_FIELDS) {
+      const from = previous[field] ?? null;
+      const to = result.rows[0][field] ?? null;
+      if (JSON.stringify(from) !== JSON.stringify(to)) changes[field] = { from, to };
+    }
+    if (Object.keys(changes).length > 0) {
+      await logAudit(req, 'company.updated', { entityType: 'company', entityId: company_id, details: { changes } });
     }
 
     res.json({ 

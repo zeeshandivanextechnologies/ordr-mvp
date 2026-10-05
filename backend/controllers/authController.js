@@ -5,6 +5,30 @@ import { query, getClient } from '../config/database.js';
 import { trackEvents } from '../utils/analytics.js';
 import config from '../config/environment.js';
 import { sendOtpEmail } from '../utils/emailService.js';
+import { logAudit } from '../utils/audit.js';
+
+// Module 35: sign-in / password events for the audit log. Best-effort (never blocks the user).
+const auditAs = (req, user, action, details = null) =>
+  logAudit(
+    { user: { id: user.id, company_id: user.company_id, full_name: user.full_name }, ip: req.ip },
+    action,
+    { entityType: 'user', entityId: user.id, details }
+  );
+
+// Logout does not require a valid session; when there is one, its user is recorded
+const sessionUser = async (req) => {
+  try {
+    const header = req.headers?.authorization || '';
+    const token = req.cookies?.token || (header.startsWith('Bearer ') ? header.slice(7) : null);
+    if (!token) return null;
+    const decoded = jwt.verify(token, config.jwtSecret);
+    if (decoded?.typ !== 'session' || !decoded.userId) return null;
+    const result = await query('SELECT id, company_id, full_name FROM users WHERE id = $1', [decoded.userId]);
+    return result.rows[0] || null;
+  } catch {
+    return null;
+  }
+};
 
 // ---------- password reset OTP helpers ----------
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -160,6 +184,7 @@ export const login = async (req, res) => {
     }
 
     await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    await auditAs(req, user, 'auth.login', { method: 'password' });
 
     const token = generateToken(user.id);
     setTokenCookie(res, token);
@@ -181,6 +206,9 @@ export const login = async (req, res) => {
 };
 
 export const logout = async (req, res) => {
+  const user = await sessionUser(req);
+  if (user) await auditAs(req, user, 'auth.logout');
+
   // Must use the same options as when the cookie was set, or browsers keep it
   res.clearCookie('token', {
     httpOnly: true,
@@ -352,6 +380,7 @@ export const changePassword = async (req, res) => {
       'UPDATE users SET password_hash = $1, password_changed_at = $2, updated_at = NOW() WHERE id = $3',
       [password_hash, changedAt, req.user.id]
     );
+    await logAudit(req, 'auth.password_changed', { entityType: 'user', entityId: req.user.id });
 
     const token = generateToken(req.user.id);
     setTokenCookie(res, token);
@@ -476,7 +505,7 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    const userResult = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    const userResult = await query('SELECT id, company_id, full_name FROM users WHERE email = $1', [email.toLowerCase()]);
     if (userResult.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid request' });
     }
@@ -506,6 +535,7 @@ export const resetPassword = async (req, res) => {
     } finally {
       client.release();
     }
+    await auditAs(req, userResult.rows[0], 'auth.password_reset');
 
     res.json({ message: 'Password reset successful' });
   } catch (error) {
@@ -609,6 +639,7 @@ export const googleCallback = async (req, res) => {
     }
 
     await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    await auditAs(req, user, 'auth.login', { method: 'google', new_account: isNew });
 
     const token = generateToken(user.id);
     setTokenCookie(res, token);
