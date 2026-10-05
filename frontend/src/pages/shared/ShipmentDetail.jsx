@@ -6,12 +6,12 @@ import api from '../../services/api';
 import '../../styles/member.css';
 
 const statusLabels = {
-  'ready-dispatch': 'Ready for Dispatch',
-  'in-transit': 'In Transit',
-  dispatched: 'Dispatched',
-  delivered: 'Delivered',
-  delayed: 'Delayed',
-  cancelled: 'Cancelled',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
 };
 
 // value = status sent to the API, btnClass = existing button style

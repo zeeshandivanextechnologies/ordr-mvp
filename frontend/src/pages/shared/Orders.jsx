@@ -108,35 +108,25 @@ export default function Orders() {
   // Every status the order status engine can set, so no order is hidden by the filter
   const filterOptions = [
     { value: 'all', label: 'All' },
-    { value: 'received', label: 'Received' },
-    { value: 'confirmed', label: 'Confirmed' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'ready-dispatch', label: 'Ready for Dispatch' },
-    { value: 'partially-dispatched', label: 'Partially Dispatched' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'in-process', label: 'In Process' },
     { value: 'dispatched', label: 'Dispatched' },
     { value: 'in-transit', label: 'In Transit' },
-    { value: 'delayed', label: 'Delayed' },
-    { value: 'partially-delivered', label: 'Partially Delivered' },
     { value: 'delivered', label: 'Delivered' },
-    { value: 'cancelled', label: 'Cancelled' },
   ];
 
   // Statuses a user can set on the order directly (same list the API accepts)
-  const manualOrderStatuses = ['received', 'confirmed', 'processing', 'ready-dispatch', 'cancelled'];
+  const manualOrderStatuses = ['accepted', 'rejected', 'in-process', 'dispatched', 'in-transit', 'delivered'];
 
   const statusLabels = {
-    received: 'Received',
-    confirmed: 'Confirmed',
-    processing: 'Processing',
-    'ready-dispatch': 'Ready for Dispatch',
-    'partially-dispatched': 'Partially Dispatched',
-    dispatched: 'Dispatched',
-    'in-transit': 'In Transit',
-    'partially-delivered': 'Partially Delivered',
-    delayed: 'Delayed',
-    delivered: 'Delivered',
-    cancelled: 'Cancelled',
-  };
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
+};
 
   const formatMoney = (value, currency) => {
     const sym = currencySymbols[currency] || currency || '';
@@ -383,8 +373,8 @@ export default function Orders() {
                     <th>Quantity</th>
                     <th>Order Value</th>
                      <th>Due Date</th> */}
-                    <th className='text-center'>Status</th>
-                    <th>Action</th>
+                    <th >Status</th>
+                    <th className='text-end'>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -414,16 +404,20 @@ export default function Orders() {
                         <td>{order.value}</td> 
                         <td>{order.due}</td> */}
                         <td>
-                          <div className="d-flex  align-items-center justify-content-center gap-2">
-                            <span className={`status-badge ${order.status}`}>
-                              {statusLabels[order.status]}
-                            </span>
-                            {/* Same rule as the Order Detail page: a cancelled order, or one whose
-                                status is driven by live shipments, cannot be set by hand */}
-                            {!order.hasActiveShipments && order.status !== 'cancelled' && (
+
+                          <span className={`status-badge ${order.status}`}>
+                              {order.status === 'accepted' ? (order.type === 'purchase' ? 'PO ACCEPTED' : 'SO ACCEPTED') : statusLabels[order.status]}
+                            </span>  
+                        </td>
+                        <td>
+
+                          <div className="d-flex  align-items-center justify-content-end  gap-2">
+
+
+                             {!order.hasActiveShipments && order.status !== 'cancelled' && (
                               <div className="custom-frm-bx mb-0">
                                 <select
-                                  className="form-select form-select-sm"
+                                  className="form-select form-select-sm" style={{height : "35px"}}
                                   value=""
                                   onChange={(e) => handleStatusChange(order, e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
@@ -436,15 +430,13 @@ export default function Orders() {
                                   {manualOrderStatuses
                                     .filter((s) => s !== order.status)
                                     .map((s) => (
-                                      <option key={s} value={s}>{s === 'cancelled' ? 'Cancel Order' : statusLabels[s]}</option>
+                                      <option key={s} value={s}>{statusLabels[s]}</option>
                                     ))}
                                 </select>
                               </div>
                             )}
-                          </div>
-                        </td>
-                        <td>
-                          <div>
+
+                            <div>
                             <button
                               className="action-dropdown-btn"
                               onClick={(e) => {
@@ -485,6 +477,10 @@ export default function Orders() {
                               document.body
                             )}
                           </div>
+
+                          </div>
+
+                          
                         </td>
                       </tr>
                     ))

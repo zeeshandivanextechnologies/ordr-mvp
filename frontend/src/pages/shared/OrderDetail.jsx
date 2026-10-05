@@ -4,26 +4,22 @@ import { FiArrowLeft, FiDownload, FiFile, FiShoppingBag, FiTruck, FiCheckCircle,
 import api from '../../services/api';
 import documentService from '../../services/documentService';
 import { toast } from 'react-toastify';
+import { printPurchaseOrder } from '../../utils/exportUtils';
 import '../../styles/member.css';
 
 const currencySymbols = { INR: '₹', USD: '$', AED: 'AED', SAR: 'SAR' };
 
 const statusLabels = {
-  received: 'Received',
-  confirmed: 'Confirmed',
-  processing: 'Processing',
-  'ready-dispatch': 'Ready for Dispatch',
-  'partially-dispatched': 'Partially Dispatched',
-  dispatched: 'Dispatched',
-  'in-transit': 'In Transit',
-  'partially-delivered': 'Partially Delivered',
-  delayed: 'Delayed',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
 };
 
 // Statuses a user can set on the order directly (before any shipment exists)
-const manualOrderStatuses = ['received', 'confirmed', 'processing', 'ready-dispatch', 'cancelled'];
+const manualOrderStatuses = ['accepted', 'rejected', 'in-process', 'dispatched', 'in-transit', 'delivered'];
 
 // Shipment status actions (same as the Shipment Detail page)
 const shipmentStatusOptions = [
@@ -46,6 +42,8 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -139,6 +137,31 @@ export default function OrderDetail() {
     return value.toLocaleString('en-IN');
   };
 
+  const handlePrintPO = async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      const compRes = await api.get('/company');
+      const company = compRes.data.company;
+      
+      const printItems = items.map((i, idx) => ({
+        'Sr. No.': idx + 1,
+        'Product / Material': i.product + (i.description ? ` - ${i.description}` : ''),
+        'SKU': i.sku || '—',
+        'Quantity': `${qty(i.quantity)} ${i.unit}`,
+        'Unit Price': formatMoney(i.unit_price, order.currency),
+        'Total': formatMoney(i.total, order.currency)
+      }));
+      
+      printPurchaseOrder(order, items, company);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate PO: ' + (err.message || err.response?.data?.error || ''));
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const orderedQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
   const dispatchedQty = items.reduce((sum, i) => sum + (Number(i.dispatched) || 0), 0);
   const deliveredQty = items.reduce((sum, i) => sum + (Number(i.delivered) || 0), 0);
@@ -148,7 +171,10 @@ export default function OrderDetail() {
   const showQty = (n) => `${qty(n)}${orderUnit ? ' ' + orderUnit : ''}`;
 
   const statusKey = order ? toStatusKey(order.status) : '';
-  const statusLabel = statusLabels[statusKey] || order?.status || '';
+  let statusLabel = statusLabels[statusKey] || order?.status || '';
+  if (statusKey === 'accepted') {
+    statusLabel = order?.order_type === 'purchase' ? 'PO ACCEPTED' : 'SO ACCEPTED';
+  }
   const isOrderCancelled = statusKey === 'cancelled';
   const hasActiveShipments = shipments.some((s) => toStatusKey(s.status) !== 'cancelled');
   // Once shipments exist the order status is calculated from them
@@ -168,6 +194,8 @@ export default function OrderDetail() {
         { label: 'PO Number', value: order.po_number || '—' },
         { label: 'Order Date', value: formatDate(order.order_date) },
         { label: 'Required Delivery Date', value: formatDate(order.required_delivery_date) },
+        { label: 'Billing Address', value: order.billing_address || '—' },
+        { label: 'Shipping Address', value: order.shipping_address || '—' },
         { label: 'Delivery Address', value: order.delivery_address || '—' },
         { label: 'Currency', value: order.currency ? `${order.currency}${currencySymbols[order.currency] && currencySymbols[order.currency] !== order.currency ? ` (${currencySymbols[order.currency]})` : ''}` : '—' },
       ]
@@ -189,6 +217,11 @@ export default function OrderDetail() {
               <div className="d-flex align-items-center gap-3 flex-wrap">
                 <span className="order-value">{formatMoney(order.total_value, order.currency)}</span>
                 <span className={`status-badge ${statusKey}`}>{statusLabel}</span>
+                {order.order_type === 'purchase' && (
+                  <button className="thm-btn outline fz-14 p-2" onClick={handlePrintPO} disabled={printing}>
+                    {printing ? 'Generating...' : 'Generate PO'}
+                  </button>
+                )}
                 {canUpdateOrderStatus && (
                  <div className='custom-frm-bx mb-0'>
                    <select
@@ -202,7 +235,7 @@ export default function OrderDetail() {
                     {manualOrderStatuses
                       .filter((s) => s !== statusKey)
                       .map((s) => (
-                        <option key={s} value={s}>{s === 'cancelled' ? 'Cancel Order' : statusLabels[s]}</option>
+                        <option key={s} value={s}>{statusLabels[s]}</option>
                       ))}
                   </select>
                  </div>
@@ -281,6 +314,9 @@ export default function OrderDetail() {
                               <th>Quantity</th>
                               <th>Unit Price</th>
                               <th>Total</th>
+                              <th>Dispatched</th>
+                              <th>Balance</th>
+                              <th>Invoice Rate</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -295,6 +331,9 @@ export default function OrderDetail() {
                                 <td>{qty(item.quantity)} {item.unit}</td>
                                 <td>{formatMoney(item.unit_price, order.currency)}</td>
                                 <td>{formatMoney(item.total, order.currency)}</td>
+                                <td>{qty(item.dispatched)} {item.unit}</td>
+                                <td>{qty(Math.max(item.quantity - item.dispatched, 0))} {item.unit}</td>
+                                <td>{item.invoice_rate ? formatMoney(item.invoice_rate, order.currency) : '—'}</td>
                               </tr>
                             ))}
                           </tbody>

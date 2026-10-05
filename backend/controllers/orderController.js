@@ -24,8 +24,12 @@ const buildCleanItems = (items) => {
 
     const unitPrice = parseFloat(item.unitPrice);
     const price = Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0;
+    const invoiceRateNum = parseFloat(item.invoiceRate);
+    const invoiceRate = Number.isFinite(invoiceRateNum) && invoiceRateNum >= 0 ? invoiceRateNum : null;
 
     return {
+      invoiceRate,
+      dispatched_quantity: parseFloat(item.dispatchedQty) || 0,
       product: item.product.trim(),
       sku: item.sku ? item.sku.trim() : null,
       description: item.description ? item.description.trim() : null,
@@ -54,11 +58,16 @@ export const updateOrder = async (req, res, next) => {
       poNumber,
       orderDate,
       requiredDeliveryDate,
+      billingAddress,
+      shippingAddress,
       deliveryAddress,
       city,
       state,
       country,
       currency,
+      comments,
+      gstPercentage,
+      gstAmount,
       items,
     } = req.body;
 
@@ -116,9 +125,9 @@ export const updateOrder = async (req, res, next) => {
     const updatedResult = await client.query(
       `UPDATE orders SET
          order_type = $1, party_name = $2, po_number = $3, order_date = $4,
-         required_delivery_date = $5, delivery_address = $6, city = $7, state = $8,
-         country = $9, currency = $10, total_value = $11, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12 AND company_id = $13
+         required_delivery_date = $5, billing_address = $6, shipping_address = $7, delivery_address = $8, city = $9, state = $10,
+         country = $11, currency = $12, total_value = $13, comments = $16, gst_percentage = $17, gst_amount = $18, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $14 AND company_id = $15
        RETURNING *`,
       [
         orderType,
@@ -126,6 +135,8 @@ export const updateOrder = async (req, res, next) => {
         poNumber.trim(),
         orderDate || null,
         requiredDeliveryDate || null,
+        billingAddress || null,
+        shippingAddress || null,
         deliveryAddress || null,
         city || null,
         state || null,
@@ -134,6 +145,9 @@ export const updateOrder = async (req, res, next) => {
         totalValue,
         id,
         companyId,
+        comments || null,
+        gstPercentage || null,
+        gstAmount || null,
       ]
     );
 
@@ -144,8 +158,8 @@ export const updateOrder = async (req, res, next) => {
     for (const item of cleanItems) {
       await client.query(
         `INSERT INTO order_items (
-           order_id, company_id, product, sku, description, quantity, unit, unit_price, total, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())`,
+           order_id, company_id, product, sku, description, quantity, unit, unit_price, invoice_rate, total, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, clock_timestamp())`,
         [
           id,
           companyId,
@@ -156,6 +170,7 @@ export const updateOrder = async (req, res, next) => {
           item.unit,
           item.unitPrice,
           item.total,
+          item.invoiceRate,
         ]
       );
     }
@@ -632,7 +647,7 @@ export const getOrderDetail = async (req, res, next) => {
     }
 
     const itemsResult = await query(
-      'SELECT id, product, sku, description, quantity, unit, unit_price, total, dispatched, delivered FROM order_items WHERE order_id = $1 ORDER BY created_at, id',
+      'SELECT id, product, sku, description, quantity, unit, unit_price, invoice_rate, total, dispatched, delivered FROM order_items WHERE order_id = $1 ORDER BY created_at, id',
       [id]
     );
 
@@ -806,11 +821,16 @@ export const createOrder = async (req, res, next) => {
       poNumber,
       orderDate,
       requiredDeliveryDate,
+      billingAddress,
+      shippingAddress,
       deliveryAddress,
       city,
       state,
       country,
       currency,
+      comments,
+      gstPercentage,
+      gstAmount,
       items,
     } = req.body;
 
@@ -848,8 +868,12 @@ export const createOrder = async (req, res, next) => {
 
       const unitPrice = parseFloat(item.unitPrice);
       const price = Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0;
+    const invoiceRateNum = parseFloat(item.invoiceRate);
+    const invoiceRate = Number.isFinite(invoiceRateNum) && invoiceRateNum >= 0 ? invoiceRateNum : null;
 
-      return {
+    return {
+      invoiceRate,
+      dispatched_quantity: parseFloat(item.dispatchedQty) || 0,
         product: item.product.trim(),
         sku: item.sku ? item.sku.trim() : null,
         description: item.description ? item.description.trim() : null,
@@ -867,9 +891,9 @@ export const createOrder = async (req, res, next) => {
     const orderResult = await client.query(
       `INSERT INTO orders (
          company_id, created_by, order_type, party_name, po_number,
-         order_date, required_delivery_date, delivery_address,
-         city, state, country, currency, total_value, status, source
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'Received', 'Manual')
+         order_date, required_delivery_date, billing_address, shipping_address, delivery_address,
+         city, state, country, currency, total_value, comments, gst_percentage, gst_amount, status, source
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'accepted', 'Manual')
        RETURNING *`,
       [
         companyId,
@@ -879,12 +903,17 @@ export const createOrder = async (req, res, next) => {
         poNumber.trim(),
         orderDate || null,
         requiredDeliveryDate || null,
+        billingAddress || null,
+        shippingAddress || null,
         deliveryAddress || null,
         city || null,
         state || null,
         country || null,
         currency || 'INR',
         totalValue,
+        comments || null,
+        gstPercentage || null,
+        gstAmount || null,
       ]
     );
 
@@ -893,8 +922,8 @@ export const createOrder = async (req, res, next) => {
     for (const item of cleanItems) {
       await client.query(
         `INSERT INTO order_items (
-           order_id, company_id, product, sku, description, quantity, unit, unit_price, total, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())`,
+           order_id, company_id, product, sku, description, quantity, unit, unit_price, invoice_rate, total, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, clock_timestamp())`,
         [
           newOrder.id,
           companyId,
@@ -905,6 +934,7 @@ export const createOrder = async (req, res, next) => {
           item.unit,
           item.unitPrice,
           item.total,
+          item.invoiceRate,
         ]
       );
     }

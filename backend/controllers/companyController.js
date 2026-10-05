@@ -2,14 +2,14 @@ import { query, getClient } from '../config/database.js';
 import { logAudit } from '../utils/audit.js';
 
 // Company settings recorded in the audit log when they change (Module 35)
-const AUDITED_COMPANY_FIELDS = ['name', 'industry', 'country', 'timezone', 'tracking_preferences', 'due_soon_days', 'stale_days'];
+const AUDITED_COMPANY_FIELDS = ['name', 'industry', 'country', 'timezone', 'tracking_preferences', 'due_soon_days', 'stale_days', 'pan', 'registration_number', 'gst_number', 'address'];
 
 export const getCompany = async (req, res) => {
   try {
     const { company_id } = req.user;
 
     const result = await query(
-      'SELECT id, name, industry, country, timezone, tracking_preferences, due_soon_days, stale_days, created_at, updated_at FROM companies WHERE id = $1',
+      'SELECT id, name, industry, country, timezone, tracking_preferences, due_soon_days, stale_days, pan, registration_number, gst_number, address, created_at, updated_at FROM companies WHERE id = $1',
       [company_id]
     );
 
@@ -40,7 +40,7 @@ export const completeOnboarding = async (req, res) => {
 export const updateCompany = async (req, res) => {
   try {
     const { company_id } = req.user;
-    const { name, industry, country, timezone, tracking_preferences } = req.body;
+    const { name, industry, country, timezone, tracking_preferences, pan, registration_number, gst_number, address } = req.body;
 
     // Needs Attention thresholds (Module 22): whole days within sensible ranges
     const readDays = (value, min, max, label) => {
@@ -67,10 +67,14 @@ export const updateCompany = async (req, res) => {
            tracking_preferences = COALESCE($5, tracking_preferences),
            due_soon_days = COALESCE($7, due_soon_days),
            stale_days = COALESCE($8, stale_days),
+           pan = COALESCE($9, pan),
+           registration_number = COALESCE($10, registration_number),
+           gst_number = COALESCE($11, gst_number),
+           address = COALESCE($12, address),
            updated_at = NOW() 
        WHERE id = $6 
-       RETURNING id, name, industry, country, timezone, tracking_preferences, due_soon_days, stale_days, updated_at`,
-      [name, industry, country, timezone, tracking_preferences, company_id, dueSoon.value, stale.value]
+       RETURNING id, name, industry, country, timezone, tracking_preferences, due_soon_days, stale_days, pan, registration_number, gst_number, address, updated_at`,
+      [name, industry, country, timezone, tracking_preferences, company_id, dueSoon.value, stale.value, pan, registration_number, gst_number, address]
     );
 
     if (result.rows.length === 0) {

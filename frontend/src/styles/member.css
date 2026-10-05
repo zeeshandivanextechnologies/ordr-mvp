@@ -270,6 +270,25 @@
   color: #00695c;
 }
 
+.status-badge.accepted,
+.status-badge.status-accepted {
+  background: #e0f2f1;
+  color: #00695c;
+}
+
+.status-badge.rejected,
+.status-badge.status-rejected {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.status-badge.in-process,
+.status-badge.status-in-process {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+
 /* Data Table */
 .member-table {
   width: 100%;

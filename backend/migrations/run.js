@@ -38,6 +38,10 @@ import { up as up36, down as down36 } from './036_create_analytics_events.js';
 import { up as up37, down as down37 } from './037_password_changed_at.js';
 import { up as up38, down as down38 } from './038_create_contact_messages.js';
 import { up as up39, down as down39 } from './039_create_site_content.js';
+import { up as up40, down as down40 } from './040_add_company_details.js';
+import { up as up41, down as down41 } from './041_add_order_addresses.js';
+
+import { up as up43, down as down43 } from './043_add_gst_to_orders.js';
 
 async function runMigrations() {
   try {
@@ -81,6 +85,10 @@ async function runMigrations() {
     await query(up37);
     await query(up38);
     await query(up39);
+    // await query(up40);
+    // await query(up41);
+
+    await query(up43);
     console.log('Migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

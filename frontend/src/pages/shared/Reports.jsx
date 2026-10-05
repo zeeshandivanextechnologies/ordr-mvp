@@ -7,17 +7,12 @@ import { useAuth } from '../../components/AuthProvider';
 import '../../styles/member.css';
 
 const statusLabels = {
-  received: 'Received',
-  confirmed: 'Confirmed',
-  processing: 'Processing',
-  'ready-dispatch': 'Ready for Dispatch',
-  'partially-dispatched': 'Partially Dispatched',
-  dispatched: 'Dispatched',
-  'in-transit': 'In Transit',
-  'partially-delivered': 'Partially Delivered',
-  delayed: 'Delayed',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
 };
 
 const money = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;

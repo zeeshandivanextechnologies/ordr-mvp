@@ -8,22 +8,17 @@ const EPS = 0.000001;
 export const SHIPMENT_STATUSES = ['ready-dispatch', 'dispatched', 'in-transit', 'delivered', 'delayed', 'cancelled'];
 
 // Statuses a user can set on the order itself; the rest are derived from shipments
-export const MANUAL_ORDER_STATUSES = ['received', 'confirmed', 'processing', 'ready-dispatch', 'cancelled'];
+export const MANUAL_ORDER_STATUSES = ['accepted', 'rejected', 'in-process', 'dispatched', 'in-transit', 'delivered'];
 
-const DERIVED_ORDER_STATUSES = ['partially-dispatched', 'dispatched', 'in-transit', 'partially-delivered', 'delivered', 'delayed'];
+const DERIVED_ORDER_STATUSES = ['dispatched', 'in-transit', 'delivered'];
 
 export const STATUS_LABELS = {
-  received: 'Received',
-  confirmed: 'Confirmed',
-  processing: 'Processing',
-  'ready-dispatch': 'Ready for Dispatch',
-  'partially-dispatched': 'Partially Dispatched',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
   dispatched: 'Dispatched',
   'in-transit': 'In Transit',
-  'partially-delivered': 'Partially Delivered',
   delivered: 'Delivered',
-  delayed: 'Delayed',
-  cancelled: 'Cancelled',
 };
 
 // Accepts legacy values like 'Dispatched' or 'In Transit' and returns the slug

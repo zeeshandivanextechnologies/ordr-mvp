@@ -77,6 +77,10 @@ export default function AdminSettings() {
     timezone: '',
     due_soon_days: 1,
     stale_days: 5,
+    pan: '',
+    registration_number: '',
+    gst_number: '',
+    address: '',
   });
   const [companyLoading, setCompanyLoading] = useState(true);
   const [savingCompany, setSavingCompany] = useState(false);
@@ -97,6 +101,10 @@ export default function AdminSettings() {
             timezone: c.timezone || '',
             due_soon_days: c.due_soon_days ?? 1,
             stale_days: c.stale_days ?? 5,
+            pan: c.pan || '',
+            registration_number: c.registration_number || '',
+            gst_number: c.gst_number || '',
+            address: c.address || '',
           });
         } catch {
           if (mounted) toast.error('Failed to load company details');
@@ -123,6 +131,10 @@ export default function AdminSettings() {
         timezone: company.timezone,
         due_soon_days: company.due_soon_days === '' ? undefined : Number(company.due_soon_days),
         stale_days: company.stale_days === '' ? undefined : Number(company.stale_days),
+        pan: company.pan,
+        registration_number: company.registration_number,
+        gst_number: company.gst_number,
+        address: company.address,
       });
       updateUser({ company_name: company.name });
       toast.success('Company details updated successfully');
@@ -229,7 +241,7 @@ export default function AdminSettings() {
           fullName: user.full_name || '',
           email: user.email || '',
           phone: user.phone || '',
-          companyName: compRes.company?.name || user.company_name || '',
+          companyName: compRes.company?.name || user.company_name || '', pan: compRes.company?.pan || '', address: compRes.company?.address || '', registrationNumber: compRes.company?.registration_number || '', companyGst: compRes.company?.gst_number || '',
           designation: user.designation || '',
           gstNumber: user.gst_number || '',
           avatarUrl: user.avatar_url || '',
@@ -335,7 +347,7 @@ export default function AdminSettings() {
         designation: profile.designation,
         gst_number: profile.gstNumber,
       });
-      await companyService.updateCompany({ name: profile.companyName });
+      await companyService.updateCompany({ name: profile.companyName, pan: profile.pan, address: profile.address, registration_number: profile.registrationNumber, gst_number: profile.companyGst });
       updateUser({
         full_name: res.user.full_name,
         email: res.user.email,
@@ -742,7 +754,31 @@ export default function AdminSettings() {
                         <input type="number" className="form-control" min="1" max="60" step="1" value={company.stale_days} onChange={(e) => handleCompanyChange('stale_days', e.target.value)} disabled={companyLoading} />
                       </div>
                     </div>
-                    <div className="col-lg-12 text-end">
+                    <div className="col-lg-6 col-md-6 col-sm-12">
+                      <div className="custom-frm-bx">
+                        <label>PAN Number</label>
+                        <input type="text" className="form-control" value={company.pan} onChange={(e) => handleCompanyChange('pan', e.target.value)} disabled={companyLoading} />
+                      </div>
+                    </div>
+                    <div className="col-lg-6 col-md-6 col-sm-12">
+                      <div className="custom-frm-bx">
+                        <label>GST Number</label>
+                        <input type="text" className="form-control" value={company.gst_number} onChange={(e) => handleCompanyChange('gst_number', e.target.value)} disabled={companyLoading} />
+                      </div>
+                    </div>
+                    <div className="col-lg-6 col-md-6 col-sm-12">
+                      <div className="custom-frm-bx">
+                        <label>Registration Number</label>
+                        <input type="text" className="form-control" value={company.registration_number} onChange={(e) => handleCompanyChange('registration_number', e.target.value)} disabled={companyLoading} />
+                      </div>
+                    </div>
+                    <div className="col-lg-12">
+                      <div className="custom-frm-bx">
+                        <label>Company Address</label>
+                        <textarea className="form-control" rows="3" value={company.address} onChange={(e) => handleCompanyChange('address', e.target.value)} disabled={companyLoading}></textarea>
+                      </div>
+                    </div>
+                    <div className="col-lg-12 text-end mt-3">
                       <button type="submit" className="thm-btn" disabled={savingCompany || companyLoading}><FiSave /> {savingCompany ? 'Saving...' : 'Save Changes'}</button>
                     </div>
                   </div>

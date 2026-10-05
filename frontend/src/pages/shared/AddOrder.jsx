@@ -23,7 +23,8 @@ export default function AddOrder() {
     poNumber: '',
     orderDate: '',
     requiredDeliveryDate: '',
-    deliveryAddress: '',
+    billingAddress: '',
+    shippingAddress: '',
     city: '',
     state: '',
     country: '',
@@ -91,7 +92,8 @@ export default function AddOrder() {
           poNumber: order.po_number || '',
           orderDate: order.order_date || '',
           requiredDeliveryDate: order.required_delivery_date || '',
-          deliveryAddress: order.delivery_address || '',
+          billingAddress: order.billing_address || '',
+          shippingAddress: order.shipping_address || order.delivery_address || '',
           city: order.city || '',
           state: order.state || '',
           country: order.country || '',
@@ -149,6 +151,9 @@ export default function AddOrder() {
     if ((field === 'qty' || field === 'unitPrice') && updated[index].qty && updated[index].unitPrice) {
       updated[index].total = (parseFloat(updated[index].qty) * parseFloat(updated[index].unitPrice)).toFixed(2);
     }
+    const q = parseFloat(updated[index].qty) || 0;
+    const d = parseFloat(updated[index].dispatchedQty) || 0;
+    updated[index].balanceQty = Math.max(0, q - d).toFixed(3);
     setLines(updated);
   };
 
@@ -286,10 +291,17 @@ export default function AddOrder() {
                 </div>
 
 
-                <div className="col-lg-12 col-md-12 col-sm-12">
+                <div className="col-lg-6 col-md-6 col-sm-12">
                   <div className="custom-frm-bx">
-                  <label className="">Delivery Address</label>
-                    <input type="text" className="form-control" name="deliveryAddress" value={formData.deliveryAddress} onChange={handleInputChange} placeholder="Full delivery address" />
+                  <label className="">Billing Address</label>
+                    <textarea className="form-control" name="billingAddress" value={formData.billingAddress || ''} onChange={handleInputChange} placeholder="Full billing address" rows="2"></textarea>
+                  </div>
+                </div>
+
+                <div className="col-lg-6 col-md-6 col-sm-12">
+                  <div className="custom-frm-bx">
+                  <label className="">Shipping / Delivery Address</label>
+                    <textarea className="form-control" name="shippingAddress" value={formData.shippingAddress || ''} onChange={handleInputChange} placeholder="Full shipping address" rows="2"></textarea>
                   </div>
                 </div>
 
@@ -390,6 +402,13 @@ export default function AddOrder() {
                     </select>
                   </div>
                 </div>
+
+                <div className="col-lg-12 col-md-12 col-sm-12">
+                  <div className="custom-frm-bx">
+                    <label>Comments (Terms & Conditions)</label>
+                    <textarea className="form-control" name="comments" value={formData.comments || ''} onChange={handleInputChange} rows="3"></textarea>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -409,6 +428,9 @@ export default function AddOrder() {
                       <th>Description</th>
                       <th>Quantity</th>
                       <th>Unit</th>
+                      <th>Invoice Rate</th>
+                      <th>DISPATCHED QTY</th>
+                      <th>Balance QTY</th>
                       <th>Unit Price</th>
                       <th>Total</th>
                       <th style={{ width: 40 }}></th>
@@ -462,6 +484,21 @@ export default function AddOrder() {
                             <option value="PCS">PCS</option>
                           </select>
                         </div>
+                        </td>
+                        <td>
+                          <div className='custom-frm-bx mb-0'>
+                            <input type="number" className='form-control' value={line.invoiceRate || ''} onChange={(e) => updateLine(idx, 'invoiceRate', e.target.value)} placeholder="0.00" />
+                          </div>
+                        </td>
+                        <td>
+                          <div className='custom-frm-bx mb-0'>
+                            <input type="number" className='form-control' value={line.dispatchedQty || ''} onChange={(e) => updateLine(idx, 'dispatchedQty', e.target.value)} placeholder="0" />
+                          </div>
+                        </td>
+                        <td>
+                          <div className='custom-frm-bx mb-0'>
+                            <input type="number" className='form-control' value={line.balanceQty || ''} readOnly placeholder="0" style={{ background: '#f9f9f9' }} />
+                          </div>
                         </td>
                         <td>
                           <div className='custom-frm-bx mb-0'>

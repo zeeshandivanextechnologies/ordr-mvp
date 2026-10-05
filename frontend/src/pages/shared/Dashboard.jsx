@@ -134,18 +134,13 @@ export default function Dashboard() {
   const attentionMore = Math.max((data?.needsAttentionTotal ?? attentionItems.length) - attentionItems.length, 0);
 
   const statusLabels = {
-    received: 'Received',
-    confirmed: 'Confirmed',
-    processing: 'Processing',
-    'ready-dispatch': 'Ready for Dispatch',
-    'partially-dispatched': 'Partially Dispatched',
-    dispatched: 'Dispatched',
-    'in-transit': 'In Transit',
-    'partially-delivered': 'Partially Delivered',
-    delayed: 'Delayed',
-    delivered: 'Delivered',
-    cancelled: 'Cancelled',
-  };
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
+};
 
   // Dashboard report (what is on screen for the selected tab): summary cards, recent orders, needs attention
   const typeLabel = orderType === 'all' ? 'All Orders' : orderType === 'sales' ? 'Sales Orders' : 'Purchase Orders';

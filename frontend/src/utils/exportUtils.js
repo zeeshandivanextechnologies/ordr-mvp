@@ -236,7 +236,7 @@ const printHtml = (html) => {
     check();
   }).then(() => win.document.fonts?.ready);
   Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 2500))])
-    .catch(() => {})
+    .catch(() => { })
     .then(() => setTimeout(print, 150));
 };
 
@@ -313,4 +313,180 @@ export function exportSectionsToCSV(sections, filename) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   return true;
+}
+
+export function printPurchaseOrder(order, items, company) {
+  const sellerName = company.name || 'Company';
+  const sellerAddress = company.address || '';
+  const sellerPan = company.pan || '';
+  const sellerGstin = company.gst_number || '';
+  const sellerReg = company.registration_number || '';
+  const title = "Purchase Order";
+  const date = new Date(order.order_date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const reqDate = order.required_delivery_date ? new Date(order.required_delivery_date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }) : "—";
+
+  const rate = parseFloat(order.gst_percentage || 0);
+  const gst = parseFloat(order.gst_amount || 0);
+  const total = parseFloat(order.total_value || 0);
+  const taxable = total - gst;
+
+  const inr = (val) => `${order.currency || ''} ${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+  const itemsHtml = items.map((i, idx) => `
+    <tr>
+      <td >${idx + 1}</td>
+      <td>
+        <div class="item-name">${escapeHtml(i.product)}</div>
+        ${i.description ? `<div >${escapeHtml(i.description)}</div>` : ''}
+      </td>
+      <td>${escapeHtml(i.sku || '—')}</td>
+      <td>${Number(i.quantity).toLocaleString('en-IN')} ${escapeHtml(i.unit)}</td>
+      <td class="right">${inr(i.unit_price)}</td>
+      <td class="right">${inr(i.total)}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} ${escapeHtml(order.po_number || "")}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--primary:#201d6a;--primary-soft:#f1f0fa;--text:#00022A;--muted:#626884;--border:#d9d8e6;--bg:#FBFBFB;--success:#2e7d32}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:"Poppins",Segoe UI,Arial,sans-serif;color:var(--text);font-size:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .toolbar{max-width:800px;margin:0px auto;padding:0px;display:flex;justify-content:flex-end;gap:10px}
+  .btn{font-family:inherit;font-size:14px;font-weight:500;border-radius:8px;padding:9px 18px;cursor:pointer;border:1px solid var(--primary)}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-outline{background:#fff;color:var(--primary)}
+  .invoice{max-width:800px;margin:16px auto 32px;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(32,29,106,.06)}
+  .head{background:var(--primary);color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+  .brand{font-size:26px;font-weight:700;letter-spacing:1px; line-height:1;}
+  .brand-sub{font-size:13px;opacity:.8;margin-top:0px;line-height:1.6;white-space:pre-line}
+  .doc{text-align:right}
+  .doc-title{font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px}
+  .paid{display:inline-block;margin-top:0px;background:#fff;color:var(--success);font-weight:600;font-size:12px;padding:4px 12px;border-radius:20px;letter-spacing:.5px}
+  .invoice-body{padding:16px}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:var(--primary-soft);border-radius:10px;padding:16px;}
+  .label-invoice{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:0px}
+  .value{font-size:14px;font-weight:600;word-break:break-all}
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .party{border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .party-name{font-size:15px;font-weight:600;margin-bottom:4px}
+  .muted{color:var(--muted);font-size:13px;line-height:1.6}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  thead th{background:var(--primary);color:#fff;font-weight:500;font-size:13px;padding:11px 14px;text-align:left}
+  thead th:first-child{border-radius:8px 0 0 8px} thead th:last-child{border-radius:0 8px 8px 0}
+  tbody td{padding:14px;border-bottom:1px solid var(--border);vertical-align:top}
+  .right{text-align:right}
+  .item-name{font-weight:600}
+  .totals{margin-left:auto;margin-top:16px;width:320px;max-width:100%}
+  .totals .row{display:flex;justify-content:space-between;padding:7px 0;color:var(--muted)}
+  .totals .row span:last-child{color:var(--text);font-weight:500}
+  .totals .grand{margin-top:6px;padding:12px 14px;background:var(--primary-soft);border-radius:8px;color:var(--primary);font-weight:700;font-size:16px}
+  .totals .grand span:last-child{color:var(--primary);font-weight:700}
+  .foot{margin-top:16px;padding-top:10px;border-top:1px dashed var(--border);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .thanks{font-weight:600;color:var(--primary)}
+  @media print{
+    .toolbar{display:none;margin:0px !important;}
+    body{background:#fff;}
+    .invoice{box-shadow:none;margin:0;}
+    @page{margin:5mm}
+  }
+</style></head>
+<body class="invoice-body">
+<div class="toolbar">
+  <button class="btn btn-outline" onclick="window.close()">Close</button>
+  <button class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+</div>
+<div class="invoice">
+  <div class="head">
+    <div>
+      <div class="brand">${escapeHtml(sellerName)}</div>
+      ${sellerAddress ? `<div class="brand-sub">${escapeHtml(sellerAddress)}</div>` : ''}
+      ${sellerPan ? `<div class="brand-sub">PAN: ${escapeHtml(sellerPan)}</div>` : ""}
+      ${sellerGstin ? `<div class="brand-sub">GSTIN: ${escapeHtml(sellerGstin)}</div>` : ""}
+      ${sellerReg ? `<div class="brand-sub">Reg No: ${escapeHtml(sellerReg)}</div>` : ""}
+    </div>
+    <div class="doc">
+      <div class="doc-title">${escapeHtml(title)}</div>
+      <span class="paid">${escapeHtml(order.po_number || "PO")}</span>
+    </div>
+  </div>
+
+  <div class="invoice-body">
+    <div class="meta">
+      <div><div class="label-invoice">PO Number</div><div class="value">${escapeHtml(order.po_number || "—")}</div></div>
+      <div><div class="label-invoice">Order Date</div><div class="value">${escapeHtml(date)}</div></div>
+      <div><div class="label-invoice">Required By</div><div class="value">${escapeHtml(reqDate)}</div></div>
+    </div>
+
+    <div class="parties">
+      <div class="party">
+        <div class="label-invoice">Supplier / Billed To</div>
+        <div class="party-name">${escapeHtml(order.party_name)}</div>
+        ${order.billing_address ? `<div class="muted" style="white-space: pre-wrap;">${escapeHtml(order.billing_address)}</div>` : ''}
+      </div>
+      <div class="party">
+        <div class="label-invoice">Shipping / Delivery Address</div>
+        <div class="muted" style="white-space: pre-wrap;">${escapeHtml(order.shipping_address || order.delivery_address || '—')}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+      <tr>
+      <th style="width: 80px; text-align: center;">SR. NO</th>
+      <th>PRODUCT / MATERIAL</th>
+      <th>SKU</th>
+      <th>QUANTITY</th>
+      <th class="right">Unit Price</th>
+      <th class="right">Total</th>
+      </tr>
+      </thead>
+      <tbody>
+        ${itemsHtml}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="row">
+      <span>Subtotal</span>
+      <span>${inr(taxable)}</span>
+      </div>
+      ${rate > 0 ? `<div class="row"><span>GST @ ${rate}%</span><span>${inr(gst)}</span></div>` : ''}
+      <div class="row grand"><span>Grand Total</span><span>${inr(total)}</span></div>
+    </div>
+
+    ${order.comments ? `
+    <div class="foot">
+      <div>
+        <div class="label-invoice">Terms & Comments</div>
+        <div class="muted" style="margin-top: 4px; white-space: pre-wrap;">${escapeHtml(order.comments)}</div>
+      </div>
+    </div>
+    ` : ''}
+  </div>
+</div>
+</body></html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  }
 }

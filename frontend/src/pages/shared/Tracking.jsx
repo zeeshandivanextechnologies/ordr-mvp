@@ -137,13 +137,13 @@ export default function Tracking() {
   ];
 
   const statusLabels = {
-    'ready-dispatch': 'Ready for Dispatch',
-    dispatched: 'Dispatched',
-    'in-transit': 'In Transit',
-    delivered: 'Delivered',
-    delayed: 'Delayed',
-    cancelled: 'Cancelled',
-  };
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  'in-process': 'In Process',
+  dispatched: 'DISPATCHED',
+  'in-transit': 'IN TRANSIT',
+  delivered: 'DELIVERED',
+};
 
   // Counts cover all shipments of the company (from the server), not only this page
   const tabs = [
