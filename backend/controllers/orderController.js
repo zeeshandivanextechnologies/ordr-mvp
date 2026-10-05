@@ -524,10 +524,14 @@ export const listOrders = async (req, res, next) => {
              (SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
              (SELECT COUNT(DISTINCT LOWER(COALESCE(unit, '')))::int FROM order_items oi WHERE oi.order_id = o.id) AS unit_count,
              (SELECT string_agg(product, ' | ' ORDER BY created_at, id) FROM order_items oi WHERE oi.order_id = o.id) AS materials,
-             (SELECT string_agg(concat_ws(' ', s.shipment_number, s.lr_number, s.awb_number, s.gr_number), ' | ')
-                FROM shipments s WHERE s.order_id = o.id) AS tracking_numbers,
-             page.last_activity_at
-           FROM page JOIN orders o ON o.id = page.id
+              (SELECT string_agg(concat_ws(' ', s.shipment_number, s.lr_number, s.awb_number, s.gr_number), ' | ')
+                 FROM shipments s WHERE s.order_id = o.id) AS tracking_numbers,
+              -- Mirrors the guard in updateOrderStatus: an order with live shipments
+              -- takes its status from the shipments, so it cannot be set by hand
+              EXISTS (SELECT 1 FROM shipments s
+                      WHERE s.order_id = o.id AND LOWER(COALESCE(s.status, '')) <> 'cancelled') AS has_active_shipments,
+              page.last_activity_at
+            FROM page JOIN orders o ON o.id = page.id
            ORDER BY page.last_activity_at DESC NULLS LAST, page.created_at DESC`,
           pageParams
         ),
@@ -556,6 +560,8 @@ export const listOrders = async (req, res, next) => {
          (SELECT string_agg(product, ' | ' ORDER BY created_at, id) FROM order_items oi WHERE oi.order_id = o.id) AS materials,
          (SELECT string_agg(concat_ws(' ', s.shipment_number, s.lr_number, s.awb_number, s.gr_number), ' | ')
             FROM shipments s WHERE s.order_id = o.id) AS tracking_numbers,
+         EXISTS (SELECT 1 FROM shipments s
+                 WHERE s.order_id = o.id AND LOWER(COALESCE(s.status, '')) <> 'cancelled') AS has_active_shipments,
          -- Latest activity on the order (edit, status change, shipment update or timeline event)
          GREATEST(
            o.updated_at,

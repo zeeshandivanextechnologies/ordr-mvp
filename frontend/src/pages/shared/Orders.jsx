@@ -33,6 +33,7 @@ export default function Orders() {
   const [total, setTotal] = useState(0);
   const [typeCounts, setTypeCounts] = useState({ sales: 0, purchase: 0 });
   const [reloadKey, setReloadKey] = useState(0);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const search = useDebouncedValue(searchTerm.trim(), 300);
 
   // Tab, status filter and search are applied on the server; a change starts again at page 1
@@ -120,6 +121,9 @@ export default function Orders() {
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
+  // Statuses a user can set on the order directly (same list the API accepts)
+  const manualOrderStatuses = ['received', 'confirmed', 'processing', 'ready-dispatch', 'cancelled'];
+
   const statusLabels = {
     received: 'Received',
     confirmed: 'Confirmed',
@@ -169,6 +173,7 @@ export default function Orders() {
       value: formatMoney(o.total_value, o.currency),
       due: formatDate(o.required_delivery_date),
       status,
+      hasActiveShipments: Boolean(o.has_active_shipments),
       type: o.order_type,
     };
   };
@@ -238,6 +243,23 @@ export default function Orders() {
       return;
     }
     exportToCSV(data, `${activeTab}_orders`);
+  };
+
+  const handleStatusChange = async (order, status) => {
+    if (!status || statusUpdatingId) return;
+    if (status === 'cancelled' && !window.confirm(`Cancel order ${order.po}? This cannot be undone.`)) return;
+    setStatusUpdatingId(order.id);
+    try {
+      await api.patch(`/orders/${order.id}/status`, { status });
+      toast.success(`Order marked ${statusLabels[status]}`);
+      setOpenAction(null);
+      // Reload so the badge, the row and the tab counts stay correct
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setStatusUpdatingId(null);
+    }
   };
 
   const handleDelete = async (orderId, label) => {
@@ -357,18 +379,18 @@ export default function Orders() {
                     <th>{activeTab === 'sales' ? 'Customer Name' : 'Supplier Name'}</th>
                     <th>PO Number</th>
                     <th>PO Date</th>
-                    <th>Material</th>
+                    {/* <th>Material</th>
                     <th>Quantity</th>
                     <th>Order Value</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
+                     <th>Due Date</th> */}
+                    <th className='text-center'>Status</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                  <td colSpan="10" className="text-center py-4">
+                  <td colSpan="6" className="text-center py-4">
                     <div className="d-flex justify-content-center align-items-center" style={{ height: "200px" }} role="status">
                           <div className="spinner-border" style={{ width: '2.5rem', height: '2.5rem', color: 'var(--primary-color)' }}>
                             <span className="visually-hidden">Loading...</span>
@@ -378,7 +400,7 @@ export default function Orders() {
                     </tr>
                   ) : filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan="10" className="text-center py-4">No orders found</td>
+                      <td colSpan="6" className="text-center py-4">No orders found</td>
                     </tr>
                   ) : (
                     filteredOrders.map((order, idx) => (
@@ -387,14 +409,39 @@ export default function Orders() {
                         <td>{order.customer}</td>
                         <td className="po-number">{order.po}</td>
                         <td>{order.poDate}</td>
-                        <td>{order.material}</td>
+                        {/* <td>{order.material}</td>
                         <td>{order.qty}</td>
-                        <td>{order.value}</td>
-                        <td>{order.due}</td>
+                        <td>{order.value}</td> 
+                        <td>{order.due}</td> */}
                         <td>
-                          <span className={`status-badge ${order.status}`}>
-                            {statusLabels[order.status]}
-                          </span>
+                          <div className="d-flex  align-items-center justify-content-center gap-2">
+                            <span className={`status-badge ${order.status}`}>
+                              {statusLabels[order.status]}
+                            </span>
+                            {/* Same rule as the Order Detail page: a cancelled order, or one whose
+                                status is driven by live shipments, cannot be set by hand */}
+                            {!order.hasActiveShipments && order.status !== 'cancelled' && (
+                              <div className="custom-frm-bx mb-0">
+                                <select
+                                  className="form-select form-select-sm"
+                                  value=""
+                                  onChange={(e) => handleStatusChange(order, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  disabled={statusUpdatingId === order.id}
+                                  aria-label={`Update status for order ${order.po}`}
+                                >
+                                  <option value="">
+                                    {statusUpdatingId === order.id ? 'Updating...' : 'Update Status'}
+                                  </option>
+                                  {manualOrderStatuses
+                                    .filter((s) => s !== order.status)
+                                    .map((s) => (
+                                      <option key={s} value={s}>{s === 'cancelled' ? 'Cancel Order' : statusLabels[s]}</option>
+                                    ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td>
                           <div>
