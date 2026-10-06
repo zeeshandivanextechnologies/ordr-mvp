@@ -116,9 +116,11 @@ function teamInviteTemplate(rawInviterName, rawCompanyName, rawRole, rawInviteLi
     <div style="margin: 8px 0;"> 
       <a href="${inviteLink}" style="background:#201d6a;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;display:inline-block;">Accept Invitation</a>
     </div>
-    <p style=" margin : 0px; padding : 0px; font-size:16px; font-weight : 500;">If you did not expect this, please ignore this email.</p>
+    <p style=" margin : 0px; padding : 0px 0 20px 20px; font-size:16px; font-weight : 500;">If you did not expect this, please ignore this email.</p>
+
+    <div style="padding:10px 30px;background:#f8f9fa;text-align:center;font-size:12px;color:#999;"><p style="margin : 0px; font-size : 16px; color : #000; font-weight : 600;">&copy; ${new Date().getFullYear()} ORDR. All rights reserved.</p></div>
   </div>
-  <div style="padding:10px 30px;background:#f8f9fa;text-align:center;font-size:12px;color:#999;"><p style="margin : 0px; font-size : 16px; color : #000; font-weight : 600;">&copy; ${new Date().getFullYear()} ORDR. All rights reserved.</p></div>
+  
   </div>
   </body>
   </html>`;

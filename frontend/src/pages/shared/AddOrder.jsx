@@ -28,7 +28,8 @@ export default function AddOrder() {
     city: '',
     state: '',
     country: '',
-    currency: 'INR'
+    currency: 'INR',
+    gstPercentage: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -98,6 +99,7 @@ export default function AddOrder() {
           state: order.state || '',
           country: order.country || '',
           currency: order.currency || 'INR',
+          gstPercentage: order.gst_percentage ? String(order.gst_percentage) : '',
         });
         setLines(
           (res.data.items || []).map((i) => ({
@@ -215,9 +217,15 @@ export default function AddOrder() {
     try {
       setLoading(true);
       setError('');
+      const subtotal = lines.reduce((sum, l) => sum + (parseFloat(l.total) || 0), 0);
+      const parsedGst = parseFloat(formData.gstPercentage);
+      const gstAmount = (!isNaN(parsedGst) && parsedGst > 0) ? (subtotal * parsedGst) / 100 : 0;
+      
       const payload = {
         type: orderType,
         ...formData,
+        gstPercentage: isNaN(parsedGst) ? null : parsedGst,
+        gstAmount: gstAmount,
         items: lines
       };
       if (editingId) {
@@ -541,11 +549,55 @@ export default function AddOrder() {
                 <span className="summary-label">Total Lines</span>
                 <span className="summary-value">{lines.length}</span>
               </div>
-              <div className="summary-row summary-row-border">
-                <span className="summary-label">Total Value</span>
-                <span className="summary-value">{currencySymbol}{lines.reduce((sum, l) => sum + (parseFloat(l.total) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              <div className="summary-row">
+                <span className="summary-label">Subtotal</span>
+                <span className="summary-value">
+                  {currencySymbol}{(() => {
+                    const subtotal = lines.reduce((sum, l) => sum + (parseFloat(l.total) || 0), 0);
+                    return subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                  })()}
+                </span>
               </div>
-              <button className="thm-lg-btn w-100 mt-3" onClick={handleSaveOrder} disabled={loading || prefillLoading}>
+              <div className="summary-row align-items-center custom-frm-bx mb-0">
+                <span className="summary-label">GST %</span>
+                <input
+                  type="number"
+                  className="form-control"
+                  style={{ width: '80px', height : "35px", textAlign: 'right', padding: '4px 8px' }}
+                  name="gstPercentage"
+                  value={formData.gstPercentage}
+                  onChange={handleInputChange}
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                />
+              </div>
+              {parseFloat(formData.gstPercentage) > 0 && (
+                <div className="summary-row text-muted">
+                  <span className="summary-label">GST Amount</span>
+                  <span className="summary-value">
+                    + {currencySymbol}{(() => {
+                      const subtotal = lines.reduce((sum, l) => sum + (parseFloat(l.total) || 0), 0);
+                      const parsedGst = parseFloat(formData.gstPercentage) || 0;
+                      const gstAmount = (subtotal * parsedGst) / 100;
+                      return gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                    })()}
+                  </span>
+                </div>
+              )}
+              <div className="summary-row summary-row-border">
+                <span className="summary-label" style={{ fontWeight: 600 }}>Total Value</span>
+                <span className="summary-value" style={{ fontWeight: 600, fontSize: '18px', color: '#161C24' }}>
+                  {currencySymbol}{(() => {
+                    const subtotal = lines.reduce((sum, l) => sum + (parseFloat(l.total) || 0), 0);
+                    const parsedGst = parseFloat(formData.gstPercentage) || 0;
+                    const gstAmount = (subtotal * parsedGst) / 100;
+                    const total = subtotal + gstAmount;
+                    return total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                  })()}
+                </span>
+              </div>
+              <button className="thm-lg-btn w-100 mt-4" onClick={handleSaveOrder} disabled={loading || prefillLoading}>
                 {prefillLoading ? 'Loading...' : loading ? 'Saving...' : 'Save Order'}
               </button>
             </div>

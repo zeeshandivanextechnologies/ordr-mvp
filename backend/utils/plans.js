@@ -6,8 +6,8 @@ export const PLANS = {
     id: 'trial',
     name: 'Free Trial',
     price: 0,
-    // Suggested trial limits (Module 29): only orders and AI extractions are capped
-    limits: { users: null, ordersPerMonth: 100, gmailInboxes: null, aiExtractions: 100, historyMonths: null },
+    // Suggested trial limits (Module 29):
+    limits: { users: 2, ordersPerMonth: 50, gmailInboxes: 1, aiExtractions: 25, historyMonths: null },
   },
   basic: {
     id: 'basic',

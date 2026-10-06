@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { FiUser, FiMail, FiLock, FiBell, FiLink, FiSave, FiHome, FiUsers, FiPlus, FiTrash2, FiEye, FiEyeOff, FiUserCheck, FiUserX, FiUpload, FiShield } from 'react-icons/fi';
 import { LuChevronDown } from 'react-icons/lu';
@@ -369,6 +370,7 @@ export default function AdminSettings() {
   const [sendingInvites, setSendingInvites] = useState(false);
 
   const [openAction, setOpenAction] = useState(null);
+  const [actionRect, setActionRect] = useState(null);
   const actionRef = useRef(null);
 
   useEffect(() => {
@@ -832,18 +834,30 @@ export default function AdminSettings() {
                             </td>
                             <td>
                               {user.id !== currentUser?.id && (
-                                <div className="position-relative" ref={openAction === idx ? actionRef : null}>
+                                <div>
                                   <button
                                     className="action-dropdown-btn"
-                                    onClick={(e) => { e.stopPropagation(); setOpenAction(openAction === idx ? null : idx); }}
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      if (openAction === idx) {
+                                        setOpenAction(null);
+                                      } else {
+                                        setOpenAction(idx);
+                                        setActionRect(e.currentTarget.getBoundingClientRect());
+                                      }
+                                    }}
                                   >
                                     Edit <LuChevronDown />
                                   </button>
-                                  {openAction === idx && (
-                                    <div className="order-dropdown-menu" style={{ right: 0, left: 'auto' }}>
-                                      {/* <Link to="#" className="order-dropdown-item" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleEditMember(); }}>
-                                        <FiEdit2 /> Edit
-                                      </Link> */}
+                                  {openAction === idx && actionRect && createPortal(
+                                    <div 
+                                      className="order-dropdown-menu portal-dropdown-menu" 
+                                      style={{ 
+                                        top: actionRect.bottom + 5,
+                                        right: window.innerWidth - actionRect.right
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
                                       <Link to="#" className="order-dropdown-item" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleChangeRole(user); }}>
                                         {user.role === 'Admin' ? <FiUser /> : <FiShield />} {user.role === 'Admin' ? 'Make Member' : 'Make Admin'}
                                       </Link>
@@ -853,7 +867,8 @@ export default function AdminSettings() {
                                       <Link to="#" className="order-dropdown-item text-danger" onClick={(e) => { e.preventDefault(); setOpenAction(null); handleRemoveMember(user.id); }}>
                                         <FiTrash2 /> Delete
                                       </Link>
-                                    </div>
+                                    </div>,
+                                    document.body
                                   )}
                                 </div>
                               )}
