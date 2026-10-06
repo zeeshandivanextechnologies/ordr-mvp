@@ -222,12 +222,7 @@ export default function Dashboard() {
           <p>{today}</p>
         </div>
         <div className="d-flex gap-2">
-          {/* <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
-            <FiDownload /> Export
-          </button>
-          <button className="thm-btn outline fz-14 p-2" onClick={() => printPage('Dashboard Report')}>
-            <FiPrinter /> Print
-          </button> */}
+       
           <button className="thm-btn outline fz-14 p-2" onClick={handleExport}>
             <FiDownload /> Export
           </button>

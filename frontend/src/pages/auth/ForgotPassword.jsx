@@ -3,12 +3,21 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiMail } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import authService from '../../services/authService';
+import useLandingContent from '../../hooks/useLandingContent';
+import useCounter from '../../hooks/useCounter';
 import '../../styles/auth.css';
+
+function StatCounter({ end, suffix = '', duration = 2000 }) {
+  const { count, ref } = useCounter(end, duration);
+  return <span ref={ref}>{count}{suffix}</span>;
+}
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { content } = useLandingContent();
+  const stats = content?.stats;
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -71,18 +80,29 @@ export default function ForgotPassword() {
                   <p>More control. <span className='d-lg-block d-sm-inline'>Smoother business.</span></p>
               </div>
               <div className="statsBar">
-                <div className="statItem">
-                  <p>Businesses</p>
-                  <h4>500+</h4>
-                </div>
-                <div className="statItem">
-                  <p>Orders Tracked</p>
-                  <h4>1M+</h4>
-                </div>
-                <div className="statItem">
-                  <p>On-time Deliveries</p>
-                  <h4>98%</h4>
-                </div>
+                {stats?.items?.length > 0 ? (
+                  stats.items.slice(0, 3).map((stat, index) => (
+                    <div className="statItem" key={index}>
+                      <p>{stat.label}</p>
+                      <h4><StatCounter end={Number(stat.value) || 0} suffix={stat.suffix || ''} duration={Number(stat.duration) || 2000} /></h4>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="statItem">
+                      <p>Businesses</p>
+                      <h4>500+</h4>
+                    </div>
+                    <div className="statItem">
+                      <p>Orders Tracked</p>
+                      <h4>1M+</h4>
+                    </div>
+                    <div className="statItem">
+                      <p>On-time Deliveries</p>
+                      <h4>98%</h4>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

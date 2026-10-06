@@ -162,9 +162,9 @@ export default function Home() {
             <h2 className="new-section-title">{features.title}</h2>
             <p className="section-subtitle">{features.subtitle}</p>
           </div>
-          <div className="row g-4">
+          <div className="row ">
             {features.items.map((item, index) => (
-            <div className="col-lg-3 col-md-6" key={index}>
+            <div className="col-lg-3 col-md-6 mb-3" key={index}>
               <div className="feature-card">
                 <div className="feature-icon"><CardIcon name={item.icon} fallback="check" /></div>
                 <h4>{item.title}</h4>
