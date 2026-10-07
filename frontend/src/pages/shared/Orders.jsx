@@ -417,7 +417,7 @@ export default function Orders() {
                              {!order.hasActiveShipments && order.status !== 'cancelled' && (
                               <div className="custom-frm-bx mb-0">
                                 <select
-                                  className="form-select form-select-sm" style={{height : "35px"}}
+                                  className="form-select form-select-sm mb-custom-select" style={{height : "35px", }}
                                   value=""
                                   onChange={(e) => handleStatusChange(order, e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
