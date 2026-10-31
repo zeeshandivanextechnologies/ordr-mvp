@@ -1330,8 +1330,6 @@
   font-weight: 500;
 }
 
-.logout-modal .modal-footer {}
-
 .logout-modal-icon {
   width: 56px;
   height: 56px;
@@ -2351,11 +2349,6 @@
   .trial-banner-content {
     flex-direction: column;
     gap: 8px;
-  }
-
-  .trial-banner-actions {
-
-    /* justify-content: flex-end; */
   }
 
   .search-results-dropdown {
